@@ -372,15 +372,6 @@ export const TableDataView: React.FC = () => {
                                 sx={{ borderRadius: 0 }}
                             />
                         )}
-                        {dataLoaded && (
-                            <Chip
-                                label="🦆 DUCKDB"
-                                color="primary"
-                                size="small"
-                                variant="outlined"
-                                sx={{ borderRadius: 0, fontWeight: 600 }}
-                            />
-                        )}
                     </Stack>
                     <Stack direction="row" spacing={1}>
                         <Badge
