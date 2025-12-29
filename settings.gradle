@@ -1,0 +1,5 @@
+rootProject.name = 'data_manager'
+
+include 'data-manager-ui'
+include 'data-manager-backend'
+include 'data-manager-client'

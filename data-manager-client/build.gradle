@@ -1,0 +1,12 @@
+plugins {
+    id 'java'
+    id 'java-library'
+}
+
+dependencies {
+    // gRPC dependencies will go here
+    implementation 'io.grpc:grpc-netty-shaded:1.60.0'
+    implementation 'io.grpc:grpc-protobuf:1.60.0'
+    implementation 'io.grpc:grpc-stub:1.60.0'
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+}
