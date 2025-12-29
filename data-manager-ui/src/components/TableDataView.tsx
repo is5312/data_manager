@@ -6,7 +6,9 @@ import {
     ColDef,
     GridApi,
     IServerSideDatasource,
-    IServerSideGetRowsParams
+    IServerSideGetRowsParams,
+    CellClassParams,
+    RowClassParams
 } from 'ag-grid-community';
 import {
     Container,
@@ -25,7 +27,8 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    Tooltip
+    Tooltip,
+    Badge
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -38,7 +41,9 @@ import {
 import { queryDuckDB } from '../services/duckdb.service';
 import { useTableData } from '../hooks/useTableData';
 import { useTableMutations } from '../hooks/useTableMutations';
+import { useTableEditStore } from '../stores/tableEditStore';
 import './LandingPage.css';
+import './TableEditStyles.css';
 
 // Register all AG Grid Enterprise modules
 ModuleRegistry.registerModules([AllEnterpriseModule]);
@@ -74,17 +79,37 @@ export const TableDataView: React.FC = () => {
         setSelectedCount,
         addDialogOpen,
         setAddDialogOpen,
-        deleteDialogOpen,
-        setDeleteDialogOpen,
+        saveDialogOpen,
+        setSaveDialogOpen,
+        limitWarningDialogOpen,
+        setLimitWarningDialogOpen,
         newRowData,
         setNewRowData,
         savingRow,
-        deletingRows,
+        savingChanges,
         onCellValueChanged,
         handleBulkDelete,
-        confirmDelete,
-        handleSaveNewRow
+        handleSaveNewRow,
+        batchSaveChanges
     } = useTableMutations();
+
+    // Get Zustand store for styling
+    const {
+        isRowDeleted,
+        isRowInserted,
+        isCellUpdated,
+        hasChanges,
+        getPendingChangesCount,
+        clearChanges
+    } = useTableEditStore();
+
+    // Clear pending changes when switching to a different table
+    useEffect(() => {
+        return () => {
+            // Cleanup when component unmounts or table changes
+            clearChanges();
+        };
+    }, [id, clearChanges]);
 
     // Wrapper functions to pass required parameters to hook functions
     const handleCellValueChanged = useCallback((params: any) => {
@@ -93,22 +118,26 @@ export const TableDataView: React.FC = () => {
     }, [id, tableInfo, onCellValueChanged, setError]);
 
     const handleBulkDeleteClick = useCallback(() => {
-        handleBulkDelete(gridApi);
-    }, [gridApi, handleBulkDelete]);
-
-    const handleConfirmDelete = useCallback(() => {
         if (!id || !tableInfo) return;
-        confirmDelete(Number(id), tableInfo.physicalName, gridApi, () => {
-            // Row count update handled internally by the hook
-        });
-    }, [id, tableInfo, gridApi, confirmDelete]);
+        handleBulkDelete(Number(id), tableInfo.physicalName, gridApi);
+    }, [id, tableInfo, gridApi, handleBulkDelete]);
 
     const handleSaveRow = useCallback(() => {
         if (!id || !tableInfo) return;
         handleSaveNewRow(Number(id), tableInfo.physicalName, gridApi, () => {
             // Row count update handled internally by the hook
         });
-    }, [id, tableInfo, gridApi, handleSaveNewRow, newRowData]);
+    }, [id, tableInfo, gridApi, handleSaveNewRow]);
+
+    const handleBatchSaveClick = useCallback(() => {
+        setSaveDialogOpen(true);
+    }, [setSaveDialogOpen]);
+
+    const handleConfirmSave = useCallback(() => {
+        if (!id || !tableInfo) return;
+        batchSaveChanges(Number(id), tableInfo.physicalName, gridApi);
+        setSaveDialogOpen(false);
+    }, [id, tableInfo, gridApi, batchSaveChanges, setSaveDialogOpen]);
 
     const handleRefresh = useCallback(() => {
         loadDataIntoDuckDB(true);
@@ -131,6 +160,13 @@ export const TableDataView: React.FC = () => {
 
                 try {
                     const { startRow, endRow, sortModel, filterModel } = params.request;
+
+                    // Get pending inserts and updates from store
+                    const { inserts, updates } = useTableEditStore.getState().getAllChanges();
+                    const pendingRows = inserts.map(({ tempId, data }) => ({
+                        id: tempId,
+                        ...data
+                    }));
 
                     // Build SQL query
                     let sql = `SELECT * FROM "${tableInfo.physicalName}"`;
@@ -159,15 +195,32 @@ export const TableDataView: React.FC = () => {
                         sql += ' ORDER BY ' + orderClauses.join(', ');
                     }
 
-                    // Add LIMIT and OFFSET for pagination
-                    const limit = (endRow ?? 100) - (startRow ?? 0);
-                    const offset = startRow ?? 0;
+                    // Adjust pagination to account for pending rows
+                    const numPendingRows = pendingRows.length;
+                    const adjustedStartRow = Math.max(0, (startRow ?? 0) - numPendingRows);
+                    const adjustedEndRow = Math.max(0, (endRow ?? 100) - numPendingRows);
+
+                    const limit = adjustedEndRow - adjustedStartRow;
+                    const offset = adjustedStartRow;
                     sql += ` LIMIT ${limit} OFFSET ${offset}`;
 
                     const rows = await queryDuckDB(sql);
 
+                    // Apply pending updates to rows from database
+                    const rowsWithUpdates = rows.map(row => {
+                        const rowUpdates = updates.find(u => u.rowId === row.id);
+                        if (rowUpdates) {
+                            const updatedRow = { ...row };
+                            rowUpdates.changes.forEach((cellUpdate, field) => {
+                                updatedRow[field] = cellUpdate.newValue;
+                            });
+                            return updatedRow;
+                        }
+                        return row;
+                    });
+
                     // Get total row count (use ref to get latest value without recreating datasource)
-                    let lastRow = rowCountRef.current;
+                    let lastRow = rowCountRef.current + numPendingRows;
                     if (filterModel && Object.keys(filterModel).length > 0) {
                         // Filtered - need to count with same WHERE clause
                         let countSql = `SELECT COUNT(*) as count FROM "${tableInfo.physicalName}"`;
@@ -189,11 +242,21 @@ export const TableDataView: React.FC = () => {
                         }
 
                         const countResult = await queryDuckDB(countSql);
-                        lastRow = Number(countResult[0].count);
+                        lastRow = Number(countResult[0].count) + numPendingRows;
                     }
 
+                    // Combine pending rows with database rows (with updates applied)
+                    // Pending rows go first, then database rows
+                    const combinedRows = [...pendingRows, ...rowsWithUpdates];
+
+                    // Slice to match the requested range
+                    const requestedRows = combinedRows.slice(
+                        startRow ?? 0,
+                        endRow ?? 100
+                    );
+
                     params.success({
-                        rowData: rows,
+                        rowData: requestedRows,
                         rowCount: lastRow
                     });
 
@@ -219,7 +282,11 @@ export const TableDataView: React.FC = () => {
                 sortable: true,
                 editable: false,
                 checkboxSelection: true,
-                headerCheckboxSelection: true
+                headerCheckboxSelection: true,
+                cellClassRules: {
+                    'cell-deleted': (params: CellClassParams) => isRowDeleted(params.data?.id),
+                    'cell-inserted': (params: CellClassParams) => isRowInserted(params.data?.id)
+                }
             }
         ];
 
@@ -236,12 +303,20 @@ export const TableDataView: React.FC = () => {
                 filter: 'agTextColumnFilter',
                 sortable: true,
                 editable: true,
-                cellStyle: DEFAULT_CELL_STYLE
+                cellStyle: DEFAULT_CELL_STYLE,
+                cellClassRules: {
+                    'cell-deleted': (params: CellClassParams) => isRowDeleted(params.data?.id),
+                    'cell-inserted': (params: CellClassParams) => isRowInserted(params.data?.id),
+                    'cell-updated': (params: CellClassParams) =>
+                        !isRowDeleted(params.data?.id) &&
+                        !isRowInserted(params.data?.id) &&
+                        isCellUpdated(params.data?.id, col.physicalName)
+                }
             });
         });
 
         return defs;
-    }, [columns]);
+    }, [columns, isRowDeleted, isRowInserted, isCellUpdated]);
 
     const onSelectionChanged = useCallback(() => {
         if (gridApi) {
@@ -308,6 +383,23 @@ export const TableDataView: React.FC = () => {
                         )}
                     </Stack>
                     <Stack direction="row" spacing={1}>
+                        <Badge
+                            badgeContent={getPendingChangesCount()}
+                            color="warning"
+                            invisible={!hasChanges()}
+                        >
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={savingChanges ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                                onClick={handleBatchSaveClick}
+                                size="small"
+                                disabled={!dataLoaded || !hasChanges() || savingChanges}
+                                sx={{ borderRadius: 0 }}
+                            >
+                                {savingChanges ? 'SAVING...' : 'SAVE CHANGES'}
+                            </Button>
+                        </Badge>
                         <Button
                             variant="contained"
                             color="error"
@@ -324,7 +416,7 @@ export const TableDataView: React.FC = () => {
                             variant="contained"
                             color="primary"
                             startIcon={<AddIcon />}
-                            onClick={() => setAddDialogOpen(true)}
+                            onClick={handleSaveRow}
                             size="small"
                             disabled={!dataLoaded}
                             sx={{ borderRadius: 0 }}
@@ -418,33 +510,73 @@ export const TableDataView: React.FC = () => {
                                 onCellValueChanged={handleCellValueChanged}
                                 rowSelection="multiple"
                                 onSelectionChanged={onSelectionChanged}
+                                singleClickEdit={true}
+                                getRowClass={(params: RowClassParams) => {
+                                    if (isRowDeleted(params.data?.id)) return 'row-deleted';
+                                    if (isRowInserted(params.data?.id)) return 'row-inserted';
+                                    return '';
+                                }}
                             />
                         </>
                     ) : null}
                 </Paper>
             </Container>
 
-            {/* Delete Confirmation Dialog */}
-            <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>Delete Rows?</DialogTitle>
+            {/* Save Confirmation Dialog */}
+            <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>Save All Changes?</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Are you sure you want to delete {selectedCount} selected row(s)?
+                        You have {getPendingChangesCount()} pending change(s).
+                        Do you want to save all changes to the database?
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                         This action cannot be undone.
                     </Typography>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeleteDialogOpen(false)} disabled={deletingRows}>
+                    <Button onClick={() => setSaveDialogOpen(false)} disabled={savingChanges}>
                         Cancel
                     </Button>
                     <Button
-                        onClick={handleConfirmDelete}
-                        color="error"
+                        onClick={handleConfirmSave}
+                        color="primary"
                         variant="contained"
-                        disabled={deletingRows}
-                        startIcon={deletingRows ? <CircularProgress size={20} color="inherit" /> : <DeleteIcon />}
+                        disabled={savingChanges}
+                        startIcon={savingChanges ? <CircularProgress size={20} color="inherit" /> : null}
                     >
-                        {deletingRows ? 'Deleting...' : 'Delete'}
+                        {savingChanges ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Limit Warning Dialog */}
+            <Dialog open={limitWarningDialogOpen} onClose={() => setLimitWarningDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Change Limit Reached</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        You have reached the maximum limit of 50 pending changes.
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        Please save your current changes before making additional edits.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 2, fontWeight: 'bold' }}>
+                        Current pending changes: {getPendingChangesCount()}
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setLimitWarningDialogOpen(false)}>
+                        OK
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setLimitWarningDialogOpen(false);
+                            setSaveDialogOpen(true);
+                        }}
+                        color="primary"
+                        variant="contained"
+                    >
+                        Save Changes Now
                     </Button>
                 </DialogActions>
             </Dialog>

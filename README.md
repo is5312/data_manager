@@ -42,6 +42,8 @@ Frontend will run on: **http://localhost:5173**
 - ✅ **REST API**: Full CRUD endpoints for table and column management
 - ✅ **Modern UI**: React + TypeScript + AG Grid with dark theme
 - ✅ **DuckDB WASM**: Initialized for client-side data operations
+- ✅ **Table Data Editing**: In-memory editing with inserts, updates, and deletes
+- ✅ **Pending Changes**: Visual feedback for unsaved changes (Green/Yellow/Red)
 - ✅ **CORS Support**: Frontend-backend communication configured
 
 ### Architecture Highlights
@@ -158,7 +160,7 @@ The UI follows modern web design best practices:
 - [ ] Implement table data editing (rows/cells)
 - [ ] Add column type management UI
 - [ ] Integrate DuckDB for client-side analytics
-- [ ] Add table deletion functionality
+- [ ] Implement table deletion functionality
 - [ ] Implement user authentication
 
 ## 📝 License

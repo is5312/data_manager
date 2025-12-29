@@ -1,0 +1,26 @@
+/* AG Grid cell styling for pending changes */
+.cell-inserted {
+    background-color: #d4edda !important;
+    border-left: 3px solid #28a745 !important;
+}
+
+.cell-updated {
+    background-color: #fff3cd !important;
+    border-left: 3px solid #ffc107 !important;
+}
+
+.cell-deleted {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+    text-decoration: line-through !important;
+    opacity: 0.7;
+}
+
+.row-deleted {
+    background-color: #f8d7da !important;
+    opacity: 0.7;
+}
+
+.row-inserted {
+    background-color: #d4edda !important;
+}

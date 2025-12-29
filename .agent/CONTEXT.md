@@ -26,6 +26,12 @@
 - Columns: Generated via `col_<timestamp>` in `MetadataService`
 - All identifiers are sanitized via `SchemaHelpers.sanitizeIdentifier()`
 
+### 4. Client-Side Change Buffering
+- **Pending Changes**: Edits (Inserts, Updates, Deletes) are tracked in memory using Zustand store
+- **Optimistic UI**: Changes are reflected immediately in the grid
+- **Safety**: Hard limit of 50 pending changes prevents memory issues
+- **Commit**: Batch save operation persists changes to backend in one go
+
 ## Technology Stack
 
 ### Backend
@@ -40,6 +46,7 @@
 - **Framework**: React 18.2 + TypeScript 5.2
 - **Build Tool**: Vite 5.2
 - **UI Library**: Material UI (MUI) v5 - Dark theme with customization
+- **State Management**: Zustand + Immer (Change buffering)
 - **Data Grid**: AG Grid Community (requires ModuleRegistry.registerModules)
 - **Client DB**: DuckDB WASM
 - **Styling**: MUI theming + custom theme with dark mode, glassmorphism, gradients
