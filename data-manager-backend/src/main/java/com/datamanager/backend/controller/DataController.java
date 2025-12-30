@@ -15,11 +15,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import javax.sql.DataSource;
-import java.io.OutputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -44,20 +42,6 @@ public class DataController {
         this.tableRepository = tableRepository;
         this.dataSource = dataSource;
         this.arrowDataSource = arrowDataSource;
-    }
-
-    /**
-     * Get all rows from a table
-     */
-    @GetMapping("/tables/{tableId}/rows")
-    public ResponseEntity<List<Map<String, Object>>> getTableData(@PathVariable Long tableId) {
-        log.info("GET /api/data/tables/{}/rows - Fetching table data", tableId);
-
-        BaseReferenceTable table = tableRepository.findById(tableId)
-                .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
-
-        List<Map<String, Object>> data = dataDao.queryTableData(table.getTblLink());
-        return ResponseEntity.ok(data);
     }
 
     /**

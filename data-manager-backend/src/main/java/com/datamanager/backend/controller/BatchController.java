@@ -1,14 +1,11 @@
 package com.datamanager.backend.controller;
 
-import com.datamanager.backend.dto.ColumnMetadataDto;
 import com.datamanager.backend.dto.BatchStatusDto;
 import com.datamanager.backend.dto.BatchUploadResponseDto;
-import com.datamanager.backend.dto.TableMetadataDto;
 import com.datamanager.backend.service.CsvBatchUploadService;
-import com.datamanager.backend.service.TableMetadataService;
-import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.http.HttpStatus;
@@ -18,89 +15,27 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
- * REST Controller for table schema operations
- * Endpoints for managing logical tables and columns
+ * REST Controller for batch upload operations
+ * Handles batch CSV uploads and batch status tracking
  */
 @RestController
 @RequestMapping("/api/schema")
 @Slf4j
-public class SchemaController {
+public class BatchController {
 
-    private final TableMetadataService tableMetadataService;
-    private final ObjectMapper objectMapper;
     private final CsvBatchUploadService csvBatchUploadService;
     private final JobExplorer jobExplorer;
+    private final ObjectMapper objectMapper;
 
-    public SchemaController(
-            TableMetadataService tableMetadataService,
-            ObjectMapper objectMapper,
+    public BatchController(
             CsvBatchUploadService csvBatchUploadService,
-            JobExplorer jobExplorer
-    ) {
-        this.tableMetadataService = tableMetadataService;
-        this.objectMapper = objectMapper;
+            JobExplorer jobExplorer,
+            ObjectMapper objectMapper) {
         this.csvBatchUploadService = csvBatchUploadService;
         this.jobExplorer = jobExplorer;
-    }
-
-    /**
-     * Get all tables
-     */
-    @GetMapping("/tables")
-    public ResponseEntity<List<TableMetadataDto>> getAllTables() {
-        log.info("GET /api/schema/tables - Fetching all tables");
-        List<TableMetadataDto> tables = tableMetadataService.getAllTables();
-        return ResponseEntity.ok(tables);
-    }
-
-    /**
-     * Get table by ID
-     */
-    @GetMapping("/tables/{tableId}")
-    public ResponseEntity<TableMetadataDto> getTableById(@PathVariable Long tableId) {
-        log.info("GET /api/schema/tables/{} - Fetching table", tableId);
-        TableMetadataDto table = tableMetadataService.getTableById(tableId);
-        return ResponseEntity.ok(table);
-    }
-
-    /**
-     * Create a new table
-     */
-    @PostMapping("/tables")
-    public ResponseEntity<TableMetadataDto> createTable(@RequestParam String label) {
-        log.info("POST /api/schema/tables - Creating table with label: {}", label);
-        TableMetadataDto created = tableMetadataService.createTable(label);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-
-    /**
-     * Create a table from CSV file upload
-     */
-    @PostMapping("/tables/upload")
-    public ResponseEntity<TableMetadataDto> createTableFromCsv(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("tableName") String tableName,
-            @RequestParam(value = "columnTypes", required = false) String columnTypesJson) {
-        log.info("POST /api/schema/tables/upload - Creating table from CSV: {}", tableName);
-
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File is empty");
-        }
-
-        List<String> columnTypes = null;
-        try {
-            if (columnTypesJson != null && !columnTypesJson.isBlank()) {
-                columnTypes = objectMapper.readValue(columnTypesJson, new TypeReference<List<String>>() {});
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid columnTypes JSON; expected an array of strings");
-        }
-
-        TableMetadataDto created = tableMetadataService.createTableFromCsv(file, tableName, columnTypes);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -266,95 +201,6 @@ public class SchemaController {
     }
 
     /**
-     * Rename a table
-     */
-    @PutMapping("/tables/{tableId}/rename")
-    public ResponseEntity<TableMetadataDto> renameTable(
-            @PathVariable Long tableId,
-            @RequestParam String newLabel) {
-        log.info("PUT /api/schema/tables/{}/rename - Renaming to: {}", tableId, newLabel);
-        TableMetadataDto updated = tableMetadataService.renameTable(tableId, newLabel);
-        return ResponseEntity.ok(updated);
-    }
-
-    /**
-     * Delete a table
-     */
-    @DeleteMapping("/tables/{tableId}")
-    public ResponseEntity<Void> deleteTable(@PathVariable Long tableId) {
-        log.info("DELETE /api/schema/tables/{} - Deleting table", tableId);
-        tableMetadataService.deleteTable(tableId);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Get all columns for a table
-     */
-    @GetMapping("/tables/{tableId}/columns")
-    public ResponseEntity<List<ColumnMetadataDto>> getColumns(@PathVariable Long tableId) {
-        log.info("GET /api/schema/tables/{}/columns - Fetching columns", tableId);
-        List<ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
-        return ResponseEntity.ok(columns);
-    }
-
-    /**
-     * Add a column to a table
-     */
-    @PostMapping("/tables/{tableId}/columns")
-    public ResponseEntity<ColumnMetadataDto> addColumn(
-            @PathVariable Long tableId,
-            @RequestParam String label,
-            @RequestParam String type) {
-        log.info("POST /api/schema/tables/{}/columns - Adding column: {} ({})", tableId, label, type);
-        ColumnMetadataDto created = tableMetadataService.addColumn(tableId, label, type);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-
-    /**
-     * Change an existing column's SQL type
-     */
-    @PutMapping("/tables/{tableId}/columns/{columnId}/type")
-    public ResponseEntity<ColumnMetadataDto> changeColumnType(
-            @PathVariable Long tableId,
-            @PathVariable Long columnId,
-            @RequestParam String type) {
-        log.info("PUT /api/schema/tables/{}/columns/{}/type - Changing type to {}", tableId, columnId, type);
-        ColumnMetadataDto updated = tableMetadataService.changeColumnType(tableId, columnId, type);
-        return ResponseEntity.ok(updated);
-    }
-
-    /**
-     * Remove a column from a table
-     */
-    @DeleteMapping("/tables/{tableId}/columns/{columnId}")
-    public ResponseEntity<Void> removeColumn(
-            @PathVariable Long tableId,
-            @PathVariable Long columnId) {
-        log.info("DELETE /api/schema/tables/{}/columns/{} - Removing column", tableId, columnId);
-        tableMetadataService.removeColumn(tableId, columnId);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
-     * Exception handler for IllegalArgumentException
-     */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException e) {
-        log.error("IllegalArgumentException: {}", e.getMessage());
-        return ResponseEntity.badRequest().body(e.getMessage());
-    }
-
-    /**
-     * Exception handler for general exceptions
-     */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> handleException(Exception e) {
-        log.error("Exception: ", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("An error occurred: " + e.getMessage());
-    }
-
-    /**
      * Helper method to extract full exception chain
      */
     private void addExceptionChain(List<String> messages, Throwable ex) {
@@ -370,3 +216,4 @@ public class SchemaController {
         }
     }
 }
+

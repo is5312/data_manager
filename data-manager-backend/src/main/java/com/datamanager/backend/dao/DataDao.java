@@ -1,20 +1,11 @@
 package com.datamanager.backend.dao;
 
-import java.util.List;
 import java.util.Map;
 
 /**
  * DAO interface for data operations on physical tables using JOOQ
  */
 public interface DataDao {
-
-    /**
-     * Query all rows from a physical table
-     * 
-     * @param tableName Physical table name
-     * @return List of rows, where each row is a map of column name to value
-     */
-    List<Map<String, Object>> queryTableData(String tableName);
 
     /**
      * Insert a row into a physical table

@@ -57,6 +57,8 @@ export const TableDataView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [gridApi, setGridApi] = React.useState<GridApi | null>(null);
+    // Store gridApi in ref for cleanup access
+    const gridApiRef = useRef<GridApi | null>(null);
 
     // Use custom hooks for data management
     const {
@@ -111,6 +113,31 @@ export const TableDataView: React.FC = () => {
             clearChanges();
         };
     }, [id, clearChanges]);
+
+    // Cleanup AG Grid instance on unmount or table change
+    useEffect(() => {
+        return () => {
+            // Destroy grid API to prevent memory leaks
+            if (gridApiRef.current) {
+                try {
+                    gridApiRef.current.destroy();
+                    gridApiRef.current = null;
+                } catch (error) {
+                    console.warn('Error destroying AG Grid instance:', error);
+                }
+            }
+        };
+    }, [id]); // Cleanup when id changes or component unmounts
+
+    // Additional cleanup effect that runs on unmount regardless of id change
+    // This ensures cleanup happens even if component unmounts quickly
+    useEffect(() => {
+        return () => {
+            // Clear Zustand store state on component unmount
+            clearChanges();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty deps array means this only runs on mount/unmount
 
     // Wrapper functions to pass required parameters to hook functions
     const handleCellValueChanged = useCallback((params: any) => {
@@ -221,13 +248,12 @@ export const TableDataView: React.FC = () => {
                         return updatedRow;
                     });
 
-                    // Get total row count (use ref to get latest value without recreating datasource)
-                    let lastRow = rowCountRef.current + numPendingRows;
-                    if (filterModel && Object.keys(filterModel).length > 0) {
-                        // Filtered - need to count with same WHERE clause
-                        let countSql = `SELECT COUNT(*) as count FROM "${tableInfo.physicalName}"`;
-                        const whereClauses: string[] = [];
+                    // Get total row count directly from DuckDB to ensure we see newly inserted rows
+                    // counting is fast in DuckDB
+                    let countSql = `SELECT COUNT(*) as count FROM "${tableInfo.physicalName}"`;
 
+                    if (filterModel && Object.keys(filterModel).length > 0) {
+                        const whereClauses: string[] = [];
                         for (const [field, filter] of Object.entries(filterModel)) {
                             if (filter.filterType === 'text' && filter.filter) {
                                 whereClauses.push(`"${field}" ILIKE '%${filter.filter}%'`);
@@ -238,14 +264,13 @@ export const TableDataView: React.FC = () => {
                                 whereClauses.push(`"${field}" ${op} ${filter.filter}`);
                             }
                         }
-
                         if (whereClauses.length > 0) {
                             countSql += ' WHERE ' + whereClauses.join(' AND ');
                         }
-
-                        const countResult = await queryDuckDB(countSql);
-                        lastRow = Number(countResult[0].count) + numPendingRows;
                     }
+
+                    const countResult = await queryDuckDB(countSql);
+                    let lastRow = Number(countResult[0].count) + numPendingRows;
 
                     // Combine pending rows with database rows (with updates applied)
                     // Pending rows go first, then database rows
@@ -567,6 +592,7 @@ export const TableDataView: React.FC = () => {
                                 headerHeight={60}
                                 onGridReady={(params) => {
                                     setGridApi(params.api);
+                                    gridApiRef.current = params.api;
                                     params.api.autoSizeAllColumns(false);
                                 }}
                                 suppressColumnVirtualisation={false}

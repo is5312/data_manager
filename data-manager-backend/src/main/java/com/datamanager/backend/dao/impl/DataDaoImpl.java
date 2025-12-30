@@ -28,20 +28,6 @@ public class DataDaoImpl implements DataDao {
     }
 
     @Override
-    public List<Map<String, Object>> queryTableData(String tableName) {
-        log.info("Querying data from table: {}", tableName);
-
-        Table<?> table = DSL.table(DSL.name(tableName));
-
-        List<Map<String, Object>> result = dsl.selectFrom(table)
-                .fetch()
-                .intoMaps();
-
-        log.info("Retrieved {} rows from table: {}", result.size(), tableName);
-        return result;
-    }
-
-    @Override
     public Map<String, Object> insertRow(String tableName, Map<String, Object> rowData) {
         log.info("Inserting row into table: {}", tableName);
 

@@ -249,20 +249,6 @@ export function useTableMutations(): UseTableMutationsResult {
                 });
 
                 insertResults = await Promise.all(insertPromises);
-
-                // Update grid with real IDs
-                if (gridApi) {
-                    insertResults.forEach(({ tempId, realId, data }) => {
-                        // Remove temp row
-                        gridApi.applyServerSideTransactionAsync({
-                            remove: [{ id: tempId }]
-                        });
-                        // Add real row
-                        gridApi.applyServerSideTransactionAsync({
-                            add: [data]
-                        });
-                    });
-                }
             }
 
             // 2. Process Updates (only if there are any)
@@ -316,10 +302,14 @@ export function useTableMutations(): UseTableMutationsResult {
                 }
             }
             // Clear the store
+            // Clear the store
             clearChanges();
 
-            // Note: User should manually refresh (F5 or refresh button) to see audit columns
-            // Automatic refresh was causing infinite loops
+            // Refresh grid to show changes (force purge to get fresh data from DuckDB)
+            if (gridApi) {
+                gridApi.clearFocusedCell();
+                gridApi.refreshServerSide({ purge: true });
+            }
 
             setSnackbar({
                 open: true,

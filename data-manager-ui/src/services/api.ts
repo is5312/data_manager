@@ -223,14 +223,6 @@ export const changeColumnType = async (tableId: number, columnId: number, type: 
 };
 
 // Data Operations
-export const fetchTableData = async (tableId: number): Promise<Array<Record<string, any>>> => {
-    return fetchWrapper<Array<Record<string, any>>>(
-        `/api/data/tables/${tableId}/rows`,
-        undefined,
-        'Failed to fetch table data'
-    );
-};
-
 export const insertTableRow = async (tableId: number, rowData: Record<string, any>): Promise<{ id: number; message: string }> => {
     return fetchWrapper<{ id: number; message: string }>(
         `/api/data/tables/${tableId}/rows`,

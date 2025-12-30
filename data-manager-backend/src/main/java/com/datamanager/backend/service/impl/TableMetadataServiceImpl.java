@@ -123,27 +123,29 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                 // Create table (logical label), physical table is auto-generated
                 TableMetadataDto table = createTable(tableName.trim());
 
-                // Create columns in the same order as CSV headers
+                // Fetch table entity once to avoid N+1 queries
+                BaseReferenceTable tableEntity = tableRepository.findById(table.getId())
+                        .orElseThrow(() -> new IllegalArgumentException("Table not found"));
+
+                // Create columns in the same order as CSV headers and track them as created
+                List<ColumnMetadataDto> createdColumns = new ArrayList<>();
                 for (int i = 0; i < headerLabels.size(); i++) {
                     String columnLabel = headerLabels.get(i);
                     String columnType = resolveOverrideTypeByIndex(columnTypes, i)
                             .orElse(inferredTypesByLabel.getOrDefault(columnLabel, "VARCHAR"));
-                    addColumn(table.getId(), columnLabel, columnType);
+                    ColumnMetadataDto columnDto = addColumn(tableEntity, columnLabel, columnType);
+                    createdColumns.add(columnDto);
                 }
 
-                if (!records.isEmpty()) {
-                    BaseReferenceTable tableEntity = tableRepository.findById(table.getId())
-                            .orElseThrow(() -> new IllegalArgumentException("Table not found"));
+                // Build column label -> physical name map from collected columns
+                Map<String, String> physicalByLabel = createdColumns.stream()
+                        .collect(Collectors.toMap(
+                                ColumnMetadataDto::getLabel,
+                                ColumnMetadataDto::getPhysicalName,
+                                (a, b) -> a,
+                                LinkedHashMap::new));
 
-                    // Map column label -> physical name for inserts (do NOT rely on repository
-                    // order)
-                    List<ColumnMetadataDto> createdColumns = getColumnsByTableId(table.getId());
-                    Map<String, String> physicalByLabel = createdColumns.stream()
-                            .collect(Collectors.toMap(
-                                    ColumnMetadataDto::getLabel,
-                                    ColumnMetadataDto::getPhysicalName,
-                                    (a, b) -> a,
-                                    LinkedHashMap::new));
+                if (!records.isEmpty()) {
 
                     for (CSVRecord record : records) {
                         Map<String, Object> rowData = new HashMap<>();
@@ -366,24 +368,22 @@ public class TableMetadataServiceImpl implements TableMetadataService {
         return odt.toLocalDateTime();
     }
 
-    @Override
-    @Transactional
-    public ColumnMetadataDto addColumn(Long tableId, String columnLabel, String columnType) {
-        log.info("Adding column {} to table ID {}", columnLabel, tableId);
-
-        // 1. Get table metadata using JPA repository
-        BaseReferenceTable table = tableRepository.findById(tableId)
-                .orElseThrow(() -> new IllegalArgumentException("Table not found with ID: " + tableId));
+    /**
+     * Private helper method to add a column using an already-fetched table entity.
+     * This avoids redundant database queries when the table entity is already available.
+     */
+    private ColumnMetadataDto addColumn(BaseReferenceTable table, String columnLabel, String columnType) {
+        log.info("Adding column {} to table {}", columnLabel, table.getTblLabel());
 
         String physicalTableName = table.getTblLink();
 
-        // 2. Generate unique physical column name
+        // 1. Generate unique physical column name
         String physicalColumnName = generatePhysicalColumnName();
 
-        // 3. Add column to physical table using JOOQ DAO
+        // 2. Add column to physical table using JOOQ DAO
         schemaDao.addColumn(physicalTableName, physicalColumnName, columnType);
 
-        // 4. Create column metadata using JPA
+        // 3. Create column metadata using JPA
         BaseColumnMap columnEntity = new BaseColumnMap();
         columnEntity.setReferenceTable(table);
         columnEntity.setTblLink(physicalTableName);
@@ -393,9 +393,21 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
         BaseColumnMap saved = columnRepository.save(columnEntity);
 
-        log.info("Successfully added column {} to table {}", columnLabel, tableId);
+        log.info("Successfully added column {} to table {}", columnLabel, table.getTblLabel());
 
         return convertToDto(saved, columnType);
+    }
+
+    @Override
+    @Transactional
+    public ColumnMetadataDto addColumn(Long tableId, String columnLabel, String columnType) {
+        log.info("Adding column {} to table ID {}", columnLabel, tableId);
+
+        // Get table metadata using JPA repository
+        BaseReferenceTable table = tableRepository.findById(tableId)
+                .orElseThrow(() -> new IllegalArgumentException("Table not found with ID: " + tableId));
+
+        return addColumn(table, columnLabel, columnType);
     }
 
     @Override
