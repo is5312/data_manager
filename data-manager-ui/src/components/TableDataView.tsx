@@ -597,7 +597,7 @@ export const TableDataView: React.FC = () => {
                                 }}
                                 suppressColumnVirtualisation={false}
                                 animateRows={false}
-                                loading={loadingData}
+                                loading={false}
                                 onCellValueChanged={handleCellValueChanged}
                                 rowSelection="multiple"
                                 onSelectionChanged={onSelectionChanged}

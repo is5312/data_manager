@@ -2,7 +2,6 @@ package com.datamanager.backend.service;
 
 import com.datamanager.backend.dto.TableMetadataDto;
 import com.datamanager.backend.dto.ColumnMetadataDto;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -19,21 +18,6 @@ public interface TableMetadataService {
      * @return Created table metadata
      */
     TableMetadataDto createTable(String tableLabel);
-
-    /**
-     * Create a table from CSV file upload
-     * 
-     * @param file      CSV file
-     * @param tableName Table name
-     * @param columnTypes Optional JSON-provided column type overrides in header order
-     * @return Created table metadata
-     */
-    TableMetadataDto createTableFromCsv(MultipartFile file, String tableName);
-
-    /**
-     * Create a table from CSV file upload with optional per-column type overrides (in header order)
-     */
-    TableMetadataDto createTableFromCsv(MultipartFile file, String tableName, List<String> columnTypes);
 
     /**
      * Add a column to a logical table

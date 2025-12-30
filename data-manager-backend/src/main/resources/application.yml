@@ -44,6 +44,13 @@ spring:
     init:
       mode: never  # Disable since we're using Flyway
 
+  # MVC Async Configuration
+  # For streaming large datasets (Arrow/CSV), we need extended timeout
+  # -1 means no timeout (use with caution), or set to high value (e.g., 600000 = 10 minutes)
+  mvc:
+    async:
+      request-timeout: 600000  # 10 minutes timeout for streaming endpoints
+
   # Spring Batch (store metadata tables in Postgres)
   batch:
     job:

@@ -28,6 +28,8 @@ public class MetadataMapper {
                 .id(entity.getId())
                 .label(entity.getTblLabel())
                 .physicalName(entity.getTblLink())
+                .description(entity.getDescription())
+                .versionNo(entity.getVersionNo())
                 .createdAt(entity.getAddTs())
                 .createdBy(entity.getAddUsr())
                 .updatedAt(entity.getUpdTs())
@@ -42,6 +44,13 @@ public class MetadataMapper {
      * Convert BaseColumnMap entity to ColumnMetadataDto
      */
     public static ColumnMetadataDto toDto(BaseColumnMap entity) {
+        return toDto(entity, null);
+    }
+
+    /**
+     * Convert BaseColumnMap entity to ColumnMetadataDto with type
+     */
+    public static ColumnMetadataDto toDto(BaseColumnMap entity, String type) {
         if (entity == null) {
             return null;
         }
@@ -52,6 +61,9 @@ public class MetadataMapper {
                 .label(entity.getColLabel())
                 .physicalName(entity.getColLink())
                 .tablePhysicalName(entity.getTblLink())
+                .type(type)
+                .description(entity.getDescription())
+                .versionNo(entity.getVersionNo())
                 .createdAt(entity.getAddTs())
                 .createdBy(entity.getAddUsr())
                 .updatedAt(entity.getUpdTs())
