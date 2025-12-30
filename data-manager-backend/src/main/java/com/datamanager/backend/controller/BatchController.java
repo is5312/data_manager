@@ -39,7 +39,8 @@ public class BatchController {
     /**
      * Batch upload (CSV or .gz/.gzip containing CSV).
      *
-     * Saves the file, peeks header/sample (streaming), creates the table, then starts an async Spring Batch job.
+     * Saves the file, peeks header/sample (streaming), creates the table, then
+     * starts an async Spring Batch job.
      * Returns the batch job execution id.
      */
     @PostMapping("/tables/upload/batch")
@@ -47,8 +48,10 @@ public class BatchController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("tableName") String tableName,
             @RequestParam(value = "columnTypes", required = false) String columnTypesJson,
-            @RequestParam(value = "selectedColumnIndices", required = false) String selectedColumnIndicesJson
-    ) {
+            @RequestParam(value = "selectedColumnIndices", required = false) String selectedColumnIndicesJson,
+            @RequestParam(value = "delimiter", required = false) Character delimiter,
+            @RequestParam(value = "quoteChar", required = false) Character quoteChar,
+            @RequestParam(value = "escapeChar", required = false) Character escapeChar) {
         if (csvBatchUploadService == null) {
             throw new IllegalStateException("CsvBatchUploadService not configured");
         }
@@ -56,7 +59,8 @@ public class BatchController {
         List<String> columnTypes = null;
         try {
             if (columnTypesJson != null && !columnTypesJson.isBlank()) {
-                columnTypes = objectMapper.readValue(columnTypesJson, new TypeReference<List<String>>() {});
+                columnTypes = objectMapper.readValue(columnTypesJson, new TypeReference<List<String>>() {
+                });
             }
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid columnTypes JSON; expected an array of strings");
@@ -65,13 +69,16 @@ public class BatchController {
         List<Integer> selectedColumnIndices = null;
         try {
             if (selectedColumnIndicesJson != null && !selectedColumnIndicesJson.isBlank()) {
-                selectedColumnIndices = objectMapper.readValue(selectedColumnIndicesJson, new TypeReference<List<Integer>>() {});
+                selectedColumnIndices = objectMapper.readValue(selectedColumnIndicesJson,
+                        new TypeReference<List<Integer>>() {
+                        });
             }
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid selectedColumnIndices JSON; expected an array of integers");
         }
 
-        BatchUploadResponseDto response = csvBatchUploadService.startBatchUpload(file, tableName, columnTypes, selectedColumnIndices);
+        BatchUploadResponseDto response = csvBatchUploadService.startBatchUpload(file, tableName, columnTypes,
+                selectedColumnIndices, delimiter, quoteChar, escapeChar);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -85,4 +92,3 @@ public class BatchController {
         return ResponseEntity.ok(status);
     }
 }
-

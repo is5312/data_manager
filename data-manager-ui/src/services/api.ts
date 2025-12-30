@@ -178,7 +178,8 @@ export const startBatchUpload = async (
     file: File,
     tableName: string,
     columnTypes?: string[],
-    selectedColumnIndices?: number[]
+    selectedColumnIndices?: number[],
+    csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }
 ): Promise<BatchUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -189,6 +190,9 @@ export const startBatchUpload = async (
     if (selectedColumnIndices && selectedColumnIndices.length > 0) {
         formData.append('selectedColumnIndices', JSON.stringify(selectedColumnIndices));
     }
+    if (csvOptions?.delimiter) formData.append('delimiter', csvOptions.delimiter);
+    if (csvOptions?.quoteChar) formData.append('quoteChar', csvOptions.quoteChar);
+    if (csvOptions?.escapeChar) formData.append('escapeChar', csvOptions.escapeChar);
 
     return fetchWrapper<BatchUploadResponse>(
         `${API_BASE_URL}/tables/upload/batch`,

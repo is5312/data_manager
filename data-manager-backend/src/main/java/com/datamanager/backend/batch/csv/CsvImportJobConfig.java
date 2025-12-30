@@ -41,17 +41,17 @@ public class CsvImportJobConfig {
             PlatformTransactionManager transactionManager,
             ItemStreamReader<Map<String, Object>> csvRowReader,
             JdbcBatchItemWriter<Map<String, Object>> csvRowWriter,
-            DetailedErrorStepListener errorListener
-    ) {
+            DetailedErrorStepListener errorListener) {
         return new StepBuilder("csvGzipImportStep", jobRepository)
-                .<Map<String, Object>, Map<String, Object>>chunk(10000, transactionManager)  // Optimized batch size for performance
+                .<Map<String, Object>, Map<String, Object>>chunk(10000, transactionManager) // Optimized batch size for
+                                                                                            // performance
                 .reader(csvRowReader)
                 .writer(csvRowWriter)
                 .listener(errorListener)
                 // Skip rows that fail due to size/data errors (e.g., row too big)
                 .faultTolerant()
                 .skip(org.springframework.dao.DataAccessException.class)
-                .skipLimit(10000)  // Allow skipping up to 10,000 bad rows
+                .skipLimit(10000) // Allow skipping up to 10,000 bad rows
                 .build();
     }
 
@@ -63,15 +63,18 @@ public class CsvImportJobConfig {
             @Value("#{jobParameters['gzip']}") String gzip,
             @Value("#{jobParameters['tableId']}") Long tableId,
             @Value("#{jobParameters['selectedColumnIndicesJson']}") String selectedColumnIndicesJson,
-            com.datamanager.backend.service.TableMetadataService tableMetadataService
-    ) {
-        // Fetch columns from database (avoids VARCHAR(2500) limit for large column counts)
+            @Value("#{jobParameters['delimiter']}") String delimiterStr,
+            @Value("#{jobParameters['quoteChar']}") String quoteCharStr,
+            @Value("#{jobParameters['escapeChar']}") String escapeCharStr,
+            com.datamanager.backend.service.TableMetadataService tableMetadataService) {
+        // Fetch columns from database (avoids VARCHAR(2500) limit for large column
+        // counts)
         List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
-        
+
         List<String> physicalColumns = columns.stream()
                 .map(com.datamanager.backend.dto.ColumnMetadataDto::getPhysicalName)
                 .toList();
-        
+
         List<String> columnTypes = columns.stream()
                 .map(com.datamanager.backend.dto.ColumnMetadataDto::getType)
                 .toList();
@@ -80,7 +83,9 @@ public class CsvImportJobConfig {
         List<Integer> selectedColumnIndices = null;
         try {
             if (selectedColumnIndicesJson != null && !selectedColumnIndicesJson.isBlank()) {
-                selectedColumnIndices = objectMapper.readValue(selectedColumnIndicesJson, new TypeReference<List<Integer>>() {});
+                selectedColumnIndices = objectMapper.readValue(selectedColumnIndicesJson,
+                        new TypeReference<List<Integer>>() {
+                        });
             }
         } catch (Exception e) {
             // If parsing fails, proceed without filtering (use all columns)
@@ -88,7 +93,13 @@ public class CsvImportJobConfig {
         }
 
         boolean isGzip = "true".equalsIgnoreCase(gzip);
-        return new CsvRowItemReader(filePath, isGzip, physicalColumns, columnTypes, selectedColumnIndices);
+
+        Character delimiter = (delimiterStr != null && !delimiterStr.isEmpty()) ? delimiterStr.charAt(0) : ',';
+        Character quoteChar = (quoteCharStr != null && !quoteCharStr.isEmpty()) ? quoteCharStr.charAt(0) : '"';
+        Character escapeChar = (escapeCharStr != null && !escapeCharStr.isEmpty()) ? escapeCharStr.charAt(0) : '\\';
+
+        return new CsvRowItemReader(filePath, isGzip, physicalColumns, columnTypes, selectedColumnIndices, delimiter,
+                quoteChar, escapeChar);
     }
 
     @Bean
@@ -97,18 +108,19 @@ public class CsvImportJobConfig {
             DataSource dataSource,
             @Value("#{jobParameters['tableId']}") Long tableId,
             @Value("#{jobParameters['physicalTableName']}") String physicalTableName,
-            com.datamanager.backend.service.TableMetadataService tableMetadataService
-    ) {
+            com.datamanager.backend.service.TableMetadataService tableMetadataService) {
         // Fetch columns from database
         List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
         List<String> physicalColumns = columns.stream()
                 .map(com.datamanager.backend.dto.ColumnMetadataDto::getPhysicalName)
                 .toList();
 
-        // Quote identifiers because our generated ULIDs can contain uppercase characters.
+        // Quote identifiers because our generated ULIDs can contain uppercase
+        // characters.
         // Postgres folds unquoted identifiers to lowercase.
         String quotedTable = quoteIdentifier(physicalTableName);
-        String columnsSql = physicalColumns.stream().map(CsvImportJobConfig::quoteIdentifier).reduce((a, b) -> a + ", " + b).orElse("");
+        String columnsSql = physicalColumns.stream().map(CsvImportJobConfig::quoteIdentifier)
+                .reduce((a, b) -> a + ", " + b).orElse("");
         String valuesSql = physicalColumns.stream().map(c -> ":" + c).reduce((a, b) -> a + ", " + b).orElse("");
         String sql = "INSERT INTO " + quotedTable + " (" + columnsSql + ") VALUES (" + valuesSql + ")";
 
@@ -118,7 +130,7 @@ public class CsvImportJobConfig {
                 .namedParametersJdbcTemplate(template)
                 .sql(sql)
                 .itemSqlParameterSourceProvider(item -> new MapSqlParameterSource(item))
-                .assertUpdates(false)  // Don't fail on skipped rows
+                .assertUpdates(false) // Don't fail on skipped rows
                 .build();
     }
 
@@ -126,10 +138,9 @@ public class CsvImportJobConfig {
         if (identifier == null || identifier.isBlank()) {
             throw new IllegalArgumentException("Identifier cannot be null or blank");
         }
-        // Identifiers are generated/sanitized elsewhere; still escape quotes defensively.
+        // Identifiers are generated/sanitized elsewhere; still escape quotes
+        // defensively.
         String escaped = identifier.replace("\"", "\"\"");
         return "\"" + escaped + "\"";
     }
 }
-
-

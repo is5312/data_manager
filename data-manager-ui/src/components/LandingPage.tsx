@@ -14,7 +14,6 @@ import {
     Box,
     CircularProgress,
     Alert,
-    Chip,
     Paper,
     Stack,
     Button,
@@ -27,15 +26,13 @@ import {
     DialogActions
 } from '@mui/material';
 import {
-    TableChartOutlined as TableChartIcon,
-    StorageOutlined as StorageIcon,
-    AddOutlined as AddIcon,
-    VisibilityOutlined as VisibilityIcon,
-    RefreshOutlined as RefreshIcon,
-    EditOutlined as EditIcon,
-    CloudUploadOutlined as UploadIcon,
-    DeleteOutlined as DeleteIcon,
-    InfoOutlined as InfoIcon
+    Add as AddIcon,
+    Visibility as VisibilityIcon,
+    Refresh as RefreshIcon,
+    Edit as EditIcon,
+    CloudUpload as UploadIcon,
+    Delete as DeleteIcon,
+    Info as InfoIcon
 } from '@mui/icons-material';
 import { fetchTables, createTable, addColumn, deleteTable, TableMetadata, startBatchUpload } from '../services/api';
 import { initDuckDB } from '../utils/duckdb';
@@ -110,10 +107,10 @@ export const LandingPage: React.FC = () => {
         }
     };
 
-    const handleCsvUpload = async (file: File, tableName: string, columnTypes?: string[], selectedColumnIndices?: number[]) => {
+    const handleCsvUpload = async (file: File, tableName: string, columnTypes?: string[], selectedColumnIndices?: number[], csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }) => {
         try {
             // Always use batch upload (CSV or GZIP). Backend will stream-read and insert asynchronously.
-            const resp = await startBatchUpload(file, tableName, columnTypes, selectedColumnIndices);
+            const resp = await startBatchUpload(file, tableName, columnTypes, selectedColumnIndices, csvOptions);
 
             // Store the mapping of tableId -> batchId
             const tableId = resp.table.id;
@@ -163,7 +160,9 @@ export const LandingPage: React.FC = () => {
 
         const handleEdit = (e: React.MouseEvent) => {
             e.stopPropagation();
-            navigate(`/tables/${params.data.id}/edit`);
+            if (params.data) {
+                navigate(`/tables/${params.data.id}/edit`);
+            }
         };
 
         const handleProgress = (e: React.MouseEvent) => {
@@ -181,7 +180,7 @@ export const LandingPage: React.FC = () => {
                         size="small"
                         onClick={(e) => {
                             e.stopPropagation();
-                            handleViewTable(params.data);
+                            if (params.data) handleViewTable(params.data);
                         }}
                         sx={{
                             color: 'primary.main',
@@ -221,7 +220,7 @@ export const LandingPage: React.FC = () => {
                         size="small"
                         onClick={(e) => {
                             e.stopPropagation();
-                            handleRequestDelete(params.data);
+                            if (params.data) handleRequestDelete(params.data);
                         }}
                         sx={{
                             color: 'error.main',

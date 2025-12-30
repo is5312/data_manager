@@ -34,10 +34,10 @@ import {
 import {
     ArrowBack as ArrowBackIcon,
     TableChart as TableChartIcon,
-    RefreshOutlined as RefreshIcon,
-    AddOutlined as AddIcon,
-    DeleteOutlined as DeleteIcon,
-    SaveOutlined as SaveIcon
+    Refresh as RefreshIcon,
+    Add as AddIcon,
+    Delete as DeleteIcon,
+    Save as SaveIcon
 } from '@mui/icons-material';
 import { queryDuckDB } from '../services/duckdb.service';
 import { useTableData } from '../hooks/useTableData';

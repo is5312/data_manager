@@ -36,6 +36,7 @@ dependencies {
     // CSV parsing (robust handling of quotes, commas, newlines)
     implementation 'org.apache.commons:commons-csv:1.11.0'
     implementation 'com.opencsv:opencsv:5.9'
+    implementation 'commons-io:commons-io:2.15.1'
     
     // Apache Arrow for efficient binary data streaming
     implementation platform('org.apache.arrow:arrow-bom:15.0.0')

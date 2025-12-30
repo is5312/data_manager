@@ -25,8 +25,10 @@ import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 /**
- * Streaming CSV reader (optionally gzip) that returns a Map keyed by physical column names.
- * This never decompresses the whole file to disk; it reads sequentially from the file path.
+ * Streaming CSV reader (optionally gzip) that returns a Map keyed by physical
+ * column names.
+ * This never decompresses the whole file to disk; it reads sequentially from
+ * the file path.
  * Supports filtering columns by selectedColumnIndices.
  */
 public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
@@ -35,21 +37,35 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
     private final boolean gzip;
     private final List<String> physicalColumns;
     private final List<String> columnTypes;
-    private final List<Integer> selectedColumnIndices;  // null means all columns
+    private final List<Integer> selectedColumnIndices; // null means all columns
+
+    // Custom CSV format options
+    private final Character delimiter;
+    private final Character quoteChar;
+    private final Character escapeChar;
 
     private CSVReader reader;
     private boolean headerSkipped = false;
 
     public CsvRowItemReader(String filePath, boolean gzip, List<String> physicalColumns, List<String> columnTypes) {
-        this(filePath, gzip, physicalColumns, columnTypes, null);
+        this(filePath, gzip, physicalColumns, columnTypes, null, null, null, null);
     }
 
-    public CsvRowItemReader(String filePath, boolean gzip, List<String> physicalColumns, List<String> columnTypes, List<Integer> selectedColumnIndices) {
+    public CsvRowItemReader(String filePath, boolean gzip, List<String> physicalColumns, List<String> columnTypes,
+            List<Integer> selectedColumnIndices) {
+        this(filePath, gzip, physicalColumns, columnTypes, selectedColumnIndices, null, null, null);
+    }
+
+    public CsvRowItemReader(String filePath, boolean gzip, List<String> physicalColumns, List<String> columnTypes,
+            List<Integer> selectedColumnIndices, Character delimiter, Character quoteChar, Character escapeChar) {
         this.filePath = filePath;
         this.gzip = gzip;
         this.physicalColumns = physicalColumns;
         this.columnTypes = columnTypes;
         this.selectedColumnIndices = selectedColumnIndices;
+        this.delimiter = delimiter != null ? delimiter : ',';
+        this.quoteChar = quoteChar != null ? quoteChar : '"';
+        this.escapeChar = escapeChar != null ? escapeChar : '\\';
     }
 
     @Override
@@ -63,9 +79,9 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
 
             // OpenCSV is more tolerant of imperfect CSVs while still streaming.
             var parser = new CSVParserBuilder()
-                    .withSeparator(',')
-                    .withQuoteChar('"')
-                    .withEscapeChar('\\')
+                    .withSeparator(delimiter)
+                    .withQuoteChar(quoteChar)
+                    .withEscapeChar(escapeChar)
                     .withIgnoreLeadingWhiteSpace(true)
                     .build();
 
@@ -102,15 +118,16 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
             for (int i = 0; i < physicalColumns.size(); i++) {
                 String col = physicalColumns.get(i);
                 String type = i < columnTypes.size() ? columnTypes.get(i) : "VARCHAR";
-                
+
                 // Map to the original CSV column index if filtering is active
-                int csvColumnIndex = (selectedColumnIndices != null && i < selectedColumnIndices.size()) 
-                    ? selectedColumnIndices.get(i) 
-                    : i;
-                
+                int csvColumnIndex = (selectedColumnIndices != null && i < selectedColumnIndices.size())
+                        ? selectedColumnIndices.get(i)
+                        : i;
+
                 String raw = csvColumnIndex < values.length ? values[csvColumnIndex] : null;
                 Object typed = parseTypedValue(raw, type);
-                // Always include all keys (with null for empty cells) so named-parameter inserts bind reliably.
+                // Always include all keys (with null for empty cells) so named-parameter
+                // inserts bind reliably.
                 rowMap.put(col, typed);
                 if (typed != null) {
                     hasAnyValue = true;
@@ -140,7 +157,8 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
 
     private Object parseTypedValue(String rawValue, String inferredType) {
         String v = normalizeCell(rawValue);
-        if (v == null) return null;
+        if (v == null)
+            return null;
 
         String type = inferredType == null ? "TEXT" : inferredType.toUpperCase().trim();
         try {
@@ -168,10 +186,13 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
     }
 
     private String normalizeCell(String raw) {
-        if (raw == null) return null;
+        if (raw == null)
+            return null;
         String v = raw.trim();
-        if (v.isEmpty()) return null;
-        if (v.equalsIgnoreCase("null")) return null;
+        if (v.isEmpty())
+            return null;
+        if (v.equalsIgnoreCase("null"))
+            return null;
         return v;
     }
 
@@ -194,5 +215,3 @@ public class CsvRowItemReader implements ItemStreamReader<Map<String, Object>> {
         return odt.toLocalDateTime();
     }
 }
-
-

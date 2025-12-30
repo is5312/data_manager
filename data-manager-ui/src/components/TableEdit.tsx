@@ -27,10 +27,10 @@ import {
     Tooltip
 } from '@mui/material';
 import {
-    ArrowBackOutlined as ArrowBackIcon,
-    DeleteOutlined as DeleteIcon,
-    AddOutlined as AddIcon,
-    TableChartOutlined as TableChartIcon
+    ArrowBack as ArrowBackIcon,
+    Delete as DeleteIcon,
+    Add as AddIcon,
+    TableChart as TableChartIcon
 } from '@mui/icons-material';
 import { fetchTableById, fetchTableColumns, addColumn, changeColumnType, TableMetadata, ColumnMetadata } from '../services/api';
 import './LandingPage.css';

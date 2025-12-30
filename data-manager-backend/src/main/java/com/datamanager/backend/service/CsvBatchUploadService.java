@@ -30,7 +30,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Set;
 import java.util.zip.GZIPInputStream;
+
+import org.apache.commons.io.input.BoundedInputStream;
 
 @Service
 @Slf4j
@@ -45,15 +48,16 @@ public class CsvBatchUploadService {
             TableMetadataService tableMetadataService,
             @Qualifier("asyncJobLauncher") JobLauncher jobLauncher,
             @Qualifier(CsvImportJobConfig.JOB_NAME) Job csvGzipImportJob,
-            ObjectMapper objectMapper
-    ) {
+            ObjectMapper objectMapper) {
         this.tableMetadataService = tableMetadataService;
         this.jobLauncher = jobLauncher;
         this.csvGzipImportJob = csvGzipImportJob;
         this.objectMapper = objectMapper;
     }
 
-    public BatchUploadResponseDto startBatchUpload(MultipartFile file, String tableName, List<String> columnTypesOverride, List<Integer> selectedColumnIndices) {
+    public BatchUploadResponseDto startBatchUpload(MultipartFile file, String tableName,
+            List<String> columnTypesOverride, List<Integer> selectedColumnIndices, Character delimiter,
+            Character quoteChar, Character escapeChar) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
@@ -66,9 +70,11 @@ public class CsvBatchUploadService {
 
         Path savedPath = saveUploadToDisk(file, originalName);
 
-        // Peek header + larger sample for inference (5000 rows to catch data quality issues)
-        // This streams and doesn't decompress the whole file to memory
-        CsvPeekResult peek = peekHeadersAndInferTypes(savedPath, gzip, 5000, selectedColumnIndices);
+        // Peek header + larger sample for inference (5000 rows to catch data quality
+        // issues)
+        // This streams and uses BoundedInputStream to enforce memory limit (100MB)
+        CsvPeekResult peek = peekHeadersAndInferTypes(savedPath, gzip, 5000, selectedColumnIndices, delimiter,
+                quoteChar, escapeChar);
 
         List<String> finalTypes = applyTypeOverrides(peek.inferredTypes, columnTypesOverride);
 
@@ -89,25 +95,31 @@ public class CsvBatchUploadService {
             JobParametersBuilder paramsBuilder = new JobParametersBuilder()
                     .addString("filePath", savedPath.toAbsolutePath().toString())
                     .addString("gzip", Boolean.toString(gzip))
-                    .addLong("tableId", table.getId())  // Pass table ID to look up columns from DB
+                    .addLong("tableId", table.getId()) // Pass table ID to look up columns from DB
                     .addString("physicalTableName", table.getPhysicalName())
-                    .addLong("requestedAt", Instant.now().toEpochMilli());
-            
-            // Add selected column indices if provided (typically small enough to fit in params)
+                    .addLong("requestedAt", Instant.now().toEpochMilli())
+                    .addString("delimiter", delimiter != null ? String.valueOf(delimiter) : ",")
+                    .addString("quoteChar", quoteChar != null ? String.valueOf(quoteChar) : "\"")
+                    .addString("escapeChar", escapeChar != null ? String.valueOf(escapeChar) : "\\");
+
+            // Add selected column indices if provided (typically small enough to fit in
+            // params)
             if (peek.selectedColumnIndices() != null && !peek.selectedColumnIndices().isEmpty()) {
                 try {
                     String indicesJson = objectMapper.writeValueAsString(peek.selectedColumnIndices());
-                    if (indicesJson.length() < 2400) {  // Leave room for other params
+                    if (indicesJson.length() < 2400) { // Leave room for other params
                         paramsBuilder.addString("selectedColumnIndicesJson", indicesJson);
-                        log.info("Storing {} selected column indices in job params", peek.selectedColumnIndices().size());
+                        log.info("Storing {} selected column indices in job params",
+                                peek.selectedColumnIndices().size());
                     } else {
-                        log.warn("Selected column indices JSON too large ({}), will re-fetch from table metadata", indicesJson.length());
+                        log.warn("Selected column indices JSON too large ({}), will re-fetch from table metadata",
+                                indicesJson.length());
                     }
                 } catch (Exception e) {
                     log.warn("Failed to serialize selected column indices", e);
                 }
             }
-            
+
             JobParameters params = paramsBuilder.toJobParameters();
 
             JobExecution execution = jobLauncher.run(csvGzipImportJob, params);
@@ -140,15 +152,17 @@ public class CsvBatchUploadService {
         }
     }
 
-    private CsvPeekResult peekHeadersAndInferTypes(Path path, boolean gzip, int sampleSize, List<Integer> selectedColumnIndices) {
+    private CsvPeekResult peekHeadersAndInferTypes(Path path, boolean gzip, int sampleSize,
+            List<Integer> selectedColumnIndices, Character delimiter, Character quoteChar, Character escapeChar) {
         try (InputStream raw = Files.newInputStream(path);
-             InputStream maybeGzip = gzip ? new GZIPInputStream(raw) : raw;
-             BufferedReader reader = new BufferedReader(new InputStreamReader(maybeGzip, StandardCharsets.UTF_8))) {
+                InputStream bounded = new BoundedInputStream(raw, 100 * 1024 * 1024); // 100MB limit
+                InputStream maybeGzip = gzip ? new GZIPInputStream(bounded) : bounded;
+                BufferedReader reader = new BufferedReader(new InputStreamReader(maybeGzip, StandardCharsets.UTF_8))) {
 
             var parser = new CSVParserBuilder()
-                    .withSeparator(',')
-                    .withQuoteChar('"')
-                    .withEscapeChar('\\')
+                    .withSeparator(delimiter != null ? delimiter : ',')
+                    .withQuoteChar(quoteChar != null ? quoteChar : '"')
+                    .withEscapeChar(escapeChar != null ? escapeChar : '\\')
                     .withIgnoreLeadingWhiteSpace(true)
                     .build();
 
@@ -161,7 +175,8 @@ public class CsvBatchUploadService {
                 // Filter columns if indices are provided
                 List<String> headerNames = new ArrayList<>();
                 if (selectedColumnIndices != null && !selectedColumnIndices.isEmpty()) {
-                    log.info("Filtering {} columns from {} total columns", selectedColumnIndices.size(), headerRow.length);
+                    log.info("Filtering {} columns from {} total columns", selectedColumnIndices.size(),
+                            headerRow.length);
                     for (int idx : selectedColumnIndices) {
                         if (idx >= 0 && idx < headerRow.length) {
                             headerNames.add(headerRow[idx]);
@@ -171,17 +186,19 @@ public class CsvBatchUploadService {
                     }
                 } else {
                     // Include all columns
-                    for (String h : headerRow) headerNames.add(h);
+                    for (String h : headerRow)
+                        headerNames.add(h);
                 }
-                
+
                 List<String> normalizedHeaders = normalizeAndUniquifyHeaders(headerNames);
 
                 List<String[]> sampleRows = new ArrayList<>();
                 int count = 0;
                 while (count < sampleSize) {
                     String[] row = csv.readNext();
-                    if (row == null) break;
-                    
+                    if (row == null)
+                        break;
+
                     // Filter row columns to match selected headers
                     if (selectedColumnIndices != null && !selectedColumnIndices.isEmpty()) {
                         String[] filteredRow = new String[selectedColumnIndices.size()];
@@ -211,7 +228,8 @@ public class CsvBatchUploadService {
 
         for (int i = 0; i < rawHeaders.size(); i++) {
             String h = rawHeaders.get(i) == null ? "" : rawHeaders.get(i).trim();
-            if (h.isBlank()) h = "column_" + (i + 1);
+            if (h.isBlank())
+                h = "column_" + (i + 1);
             h = h.replaceAll("\\s+", "_").replaceAll("[^a-zA-Z0-9_]", "_");
 
             String candidate = h;
@@ -238,16 +256,23 @@ public class CsvBatchUploadService {
             boolean sawAnyValue = false;
 
             for (String[] record : records) {
-                if (record == null || colIndex >= record.length) continue;
+                if (record == null || colIndex >= record.length)
+                    continue;
                 String v = normalizeCell(record[colIndex]);
-                if (v == null) continue;
+                if (v == null)
+                    continue;
                 sawAnyValue = true;
 
-                if (!isBoolean(v)) allBooleans = false;
-                if (!isInteger(v)) allIntegers = false;
-                if (!isDecimal(v)) allDecimals = false;
-                if (!isDate(v)) allDates = false;
-                if (!isTimestamp(v)) allTimestamps = false;
+                if (!isBoolean(v))
+                    allBooleans = false;
+                if (!isInteger(v))
+                    allIntegers = false;
+                if (!isDecimal(v))
+                    allDecimals = false;
+                if (!isDate(v))
+                    allDates = false;
+                if (!isTimestamp(v))
+                    allTimestamps = false;
             }
 
             // CONSERVATIVE: Default to TEXT for all columns to avoid type mismatch errors.
@@ -275,21 +300,27 @@ public class CsvBatchUploadService {
     }
 
     private List<String> applyTypeOverrides(List<String> inferred, List<String> override) {
-        if (override == null || override.isEmpty()) return inferred;
+        if (override == null || override.isEmpty())
+            return inferred;
         List<String> out = new ArrayList<>();
         for (int i = 0; i < inferred.size(); i++) {
             String o = i < override.size() ? override.get(i) : null;
-            if (o != null && !o.isBlank()) out.add(o.trim());
-            else out.add(inferred.get(i));
+            if (o != null && !o.isBlank())
+                out.add(o.trim());
+            else
+                out.add(inferred.get(i));
         }
         return out;
     }
 
     private String normalizeCell(String raw) {
-        if (raw == null) return null;
+        if (raw == null)
+            return null;
         String v = raw.trim();
-        if (v.isEmpty()) return null;
-        if (v.equalsIgnoreCase("null")) return null;
+        if (v.isEmpty())
+            return null;
+        if (v.equalsIgnoreCase("null"))
+            return null;
         return v;
     }
 
@@ -342,7 +373,7 @@ public class CsvBatchUploadService {
         }
     }
 
-    private record CsvPeekResult(List<String> headers, List<String> inferredTypes, List<Integer> selectedColumnIndices) {}
+    private record CsvPeekResult(List<String> headers, List<String> inferredTypes,
+            List<Integer> selectedColumnIndices) {
+    }
 }
-
-
