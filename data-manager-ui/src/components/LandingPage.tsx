@@ -27,15 +27,15 @@ import {
     DialogActions
 } from '@mui/material';
 import {
-    TableChart as TableChartIcon,
-    Storage as StorageIcon,
-    Add as AddIcon,
-    Visibility as VisibilityIcon,
-    Refresh as RefreshIcon,
-    Edit as EditIcon,
-    CloudUpload as UploadIcon,
-    Delete as DeleteIcon,
-    Info as InfoIcon
+    TableChartOutlined as TableChartIcon,
+    StorageOutlined as StorageIcon,
+    AddOutlined as AddIcon,
+    VisibilityOutlined as VisibilityIcon,
+    RefreshOutlined as RefreshIcon,
+    EditOutlined as EditIcon,
+    CloudUploadOutlined as UploadIcon,
+    DeleteOutlined as DeleteIcon,
+    InfoOutlined as InfoIcon
 } from '@mui/icons-material';
 import { fetchTables, createTable, addColumn, deleteTable, TableMetadata, startBatchUpload } from '../services/api';
 import { initDuckDB } from '../utils/duckdb';
@@ -264,10 +264,66 @@ export const LandingPage: React.FC = () => {
         {
             field: 'physicalName',
             headerName: 'REF ID',
+            width: 180,
+            sortable: true,
+            filter: true,
+            cellStyle: () => ({ color: '#000000', fontFamily: 'Roboto Mono', fontSize: '0.75rem' })
+        },
+        {
+            field: 'description',
+            headerName: 'DESCRIPTION',
             flex: 1,
             sortable: true,
             filter: true,
-            cellStyle: () => ({ color: '#000000', fontFamily: 'Roboto Mono' })
+            cellStyle: () => ({ color: '#666666', fontSize: '0.8rem' })
+        },
+        {
+            field: 'versionNo',
+            headerName: 'VER',
+            width: 90,
+            sortable: true,
+            filter: true,
+            cellStyle: () => ({ color: '#0066CC', fontWeight: 600, textAlign: 'center' })
+        },
+        {
+            field: 'createdBy',
+            headerName: 'CREATED BY',
+            width: 120,
+            sortable: true,
+            filter: true,
+            cellStyle: () => ({ color: '#666666', fontSize: '0.75rem' })
+        },
+        {
+            field: 'createdAt',
+            headerName: 'CREATED AT',
+            width: 160,
+            sortable: true,
+            filter: true,
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                return new Date(params.value).toLocaleString();
+            },
+            cellStyle: () => ({ color: '#666666', fontSize: '0.75rem', fontFamily: 'Roboto Mono' })
+        },
+        {
+            field: 'updatedBy',
+            headerName: 'UPDATED BY',
+            width: 120,
+            sortable: true,
+            filter: true,
+            cellStyle: () => ({ color: '#666666', fontSize: '0.75rem' })
+        },
+        {
+            field: 'updatedAt',
+            headerName: 'UPDATED AT',
+            width: 160,
+            sortable: true,
+            filter: true,
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                return new Date(params.value).toLocaleString();
+            },
+            cellStyle: () => ({ color: '#666666', fontSize: '0.75rem', fontFamily: 'Roboto Mono' })
         }
     ], [ViewActionRenderer]);
 
@@ -300,25 +356,35 @@ export const LandingPage: React.FC = () => {
                         />
                     </Stack>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Button
-                            variant="contained"
-                            onClick={() => setCreateDialogOpen(true)}
-                            size="small"
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            <AddIcon fontSize="small" />
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            onClick={() => setCsvUploadDialogOpen(true)}
-                            size="small"
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            <UploadIcon fontSize="small" />
-                        </Button>
-                        <IconButton onClick={loadData} size="small" sx={{ color: 'text.secondary' }}>
-                            <RefreshIcon fontSize="small" />
-                        </IconButton>
+                        <Tooltip title="Create New Table">
+                            <IconButton
+                                onClick={() => setCreateDialogOpen(true)}
+                                size="small"
+                                color="primary"
+                                sx={{ borderRadius: 1, border: '1px solid', borderColor: 'primary.light' }}
+                            >
+                                <AddIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Batch Upload (CSV/GZIP)">
+                            <IconButton
+                                onClick={() => setCsvUploadDialogOpen(true)}
+                                size="small"
+                                color="secondary"
+                                sx={{ borderRadius: 1, border: '1px solid', borderColor: 'secondary.light' }}
+                            >
+                                <UploadIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Refresh Table List">
+                            <IconButton
+                                onClick={loadData}
+                                size="small"
+                                sx={{ borderRadius: 1 }}
+                            >
+                                <RefreshIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Box>
 
@@ -349,11 +415,13 @@ export const LandingPage: React.FC = () => {
                             pagination={true}
                             paginationPageSize={50}
                             rowHeight={28}
-                            headerHeight={32}
+                            headerHeight={60}
                             defaultColDef={{
                                 sortable: true,
                                 filter: true,
                                 resizable: true,
+                                wrapHeaderText: true,
+                                autoHeaderHeight: true,
                                 cellStyle: { display: 'flex', alignItems: 'center' }
                             }}
                         />

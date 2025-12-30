@@ -51,9 +51,9 @@
 /* Enable text wrapping in header cells */
 .ag-header-cell-text {
     white-space: normal !important;
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
+    overflow-wrap: normal;
+    word-wrap: normal;
+    word-break: keep-all;
 }
 
 /* Center align wrapped header text */
@@ -65,6 +65,8 @@
 .ag-header-cell {
     padding-top: 4px !important;
     padding-bottom: 4px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
 }
 
 /* Custom Scrollbar for the Grid */

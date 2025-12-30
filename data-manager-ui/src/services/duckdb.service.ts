@@ -200,8 +200,26 @@ async function downloadAndInsertArrowStream(
         columnCount = batch.numCols;
         batchNumber++;
 
-        // Skip empty batches 
-        if (batchRowCount === 0) continue;
+        // For empty batches, still create the table structure if not created yet
+        if (batchRowCount === 0) {
+            if (!tableCreated && columnCount > 0) {
+                // Create empty table with schema from the batch
+                const table = new arrow.Table(batch);
+                const batchBuffer = arrow.tableToIPC(table);
+
+                await conn.insertArrowFromIPCStream(batchBuffer, {
+                    name: tableName,
+                    create: true
+                });
+                tableCreated = true;
+                console.log(`📋 Created empty table structure: ${columnCount} columns`);
+
+                if (onProgress) {
+                    onProgress(0, totalBytes, 'inserting', 0);
+                }
+            }
+            continue;
+        }
 
         // Write this single batch to an IPC buffer so DuckDB can read it
         // We create a temporary table with just this batch to serialize it

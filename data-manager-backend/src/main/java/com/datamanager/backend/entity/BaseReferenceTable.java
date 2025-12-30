@@ -29,6 +29,12 @@ public class BaseReferenceTable {
     @Column(name = "tbl_link", nullable = false, unique = true)
     private String tblLink;
 
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "version_no")
+    private Integer versionNo = 1;
+
     @Column(name = "add_ts")
     private LocalDateTime addTs;
 
@@ -50,10 +56,16 @@ public class BaseReferenceTable {
         if (addUsr == null) {
             addUsr = "system";
         }
+        if (versionNo == null) {
+            versionNo = 1;
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updTs = LocalDateTime.now();
+        if (versionNo != null) {
+            versionNo++;
+        }
     }
 }

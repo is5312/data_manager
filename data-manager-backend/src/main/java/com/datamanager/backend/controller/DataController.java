@@ -183,6 +183,7 @@ public class DataController {
 
     /**
      * Insert a new row into a table
+     * Returns the complete inserted row including audit columns
      */
     @PostMapping("/tables/{tableId}/rows")
     public ResponseEntity<Map<String, Object>> insertRow(
@@ -193,14 +194,22 @@ public class DataController {
         BaseReferenceTable table = tableRepository.findById(tableId)
                 .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
 
-        Long id = dataDao.insertRow(table.getTblLink(), rowData);
+        Map<String, Object> auditData = dataDao.insertRow(table.getTblLink(), rowData);
 
-        Map<String, Object> response = Map.of("id", id, "message", "Row inserted successfully");
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("id", auditData.get("id"));
+        response.put("message", "Row inserted successfully");
+        response.put("add_usr", auditData.get("add_usr"));
+        response.put("add_ts", auditData.get("add_ts"));
+        response.put("upd_usr", auditData.get("upd_usr"));
+        response.put("upd_ts", auditData.get("upd_ts"));
+
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     /**
      * Update a row in a table
+     * Returns the complete updated row including audit columns
      */
     @PutMapping("/tables/{tableId}/rows/{rowId}")
     public ResponseEntity<Map<String, Object>> updateRow(
@@ -212,9 +221,15 @@ public class DataController {
         BaseReferenceTable table = tableRepository.findById(tableId)
                 .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
 
-        dataDao.updateRow(table.getTblLink(), rowId, rowData);
+        Map<String, Object> auditData = dataDao.updateRow(table.getTblLink(), rowId, rowData);
 
-        Map<String, Object> response = Map.of("message", "Row updated successfully");
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Row updated successfully");
+        response.put("add_usr", auditData.get("add_usr"));
+        response.put("add_ts", auditData.get("add_ts"));
+        response.put("upd_usr", auditData.get("upd_usr"));
+        response.put("upd_ts", auditData.get("upd_ts"));
+
         return ResponseEntity.ok(response);
     }
 

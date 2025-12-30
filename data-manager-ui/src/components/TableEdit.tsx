@@ -23,13 +23,14 @@ import {
     FormControl,
     InputLabel,
     Chip,
-    Snackbar
+    Snackbar,
+    Tooltip
 } from '@mui/material';
 import {
-    ArrowBack as ArrowBackIcon,
-    Delete as DeleteIcon,
-    Add as AddIcon,
-    TableChart as TableChartIcon
+    ArrowBackOutlined as ArrowBackIcon,
+    DeleteOutlined as DeleteIcon,
+    AddOutlined as AddIcon,
+    TableChartOutlined as TableChartIcon
 } from '@mui/icons-material';
 import { fetchTableById, fetchTableColumns, addColumn, changeColumnType, TableMetadata, ColumnMetadata } from '../services/api';
 import './LandingPage.css';
@@ -131,13 +132,15 @@ export const TableEdit: React.FC = () => {
                     alignItems: 'center'
                 }}>
                     <Stack direction="row" spacing={2} alignItems="center">
-                        <Button
-                            startIcon={<ArrowBackIcon />}
-                            onClick={() => navigate('/')}
-                            sx={{ color: 'text.secondary', minWidth: 'auto', fontWeight: 600 }}
-                        >
-                            BACK
-                        </Button>
+                        <Tooltip title="Go Back">
+                            <IconButton
+                                onClick={() => navigate('/')}
+                                sx={{ color: 'text.secondary' }}
+                                size="small"
+                            >
+                                <ArrowBackIcon />
+                            </IconButton>
+                        </Tooltip>
                         <Box sx={{ width: '1px', height: '20px', bgcolor: '#E0E0E0' }} />
                         <TableChartIcon sx={{ color: 'primary.main', fontSize: 20 }} />
                         <Typography variant="h6" sx={{ color: 'text.primary', letterSpacing: '0.1em', fontSize: '0.875rem' }}>
@@ -152,15 +155,21 @@ export const TableEdit: React.FC = () => {
                             />
                         )}
                     </Stack>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => setAddColumnDialogOpen(true)}
-                        size="small"
-                        disabled={loading}
-                    >
-                        ADD COLUMN
-                    </Button>
+                    <Tooltip title="Add New Column">
+                        <IconButton
+                            color="primary"
+                            onClick={() => setAddColumnDialogOpen(true)}
+                            disabled={loading}
+                            size="small"
+                            sx={{
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'primary.light'
+                            }}
+                        >
+                            <AddIcon />
+                        </IconButton>
+                    </Tooltip>
                 </Box>
 
                 {error && (
@@ -207,14 +216,42 @@ export const TableEdit: React.FC = () => {
                                     >
                                         <ListItemText
                                             primary={
-                                                <Typography sx={{ color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}>
-                                                    {col.label}
-                                                </Typography>
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Typography sx={{ color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}>
+                                                        {col.label}
+                                                    </Typography>
+                                                    {col.versionNo && (
+                                                        <Chip
+                                                            label={`v${col.versionNo}`}
+                                                            size="small"
+                                                            sx={{ height: '18px', fontSize: '0.65rem', bgcolor: '#E3F2FD', color: '#0066CC' }}
+                                                        />
+                                                    )}
+                                                </Stack>
                                             }
                                             secondary={
-                                                <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontFamily: 'Roboto Mono', mt: 0.25 }}>
-                                                    Physical: {col.physicalName}
-                                                </Typography>
+                                                <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                                                    <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontFamily: 'Roboto Mono' }}>
+                                                        Physical: {col.physicalName}
+                                                    </Typography>
+                                                    {col.description && (
+                                                        <Typography sx={{ color: '#666', fontSize: '0.75rem', fontStyle: 'italic' }}>
+                                                            {col.description}
+                                                        </Typography>
+                                                    )}
+                                                    <Stack direction="row" spacing={2} sx={{ fontSize: '0.7rem', color: '#999' }}>
+                                                        {col.createdBy && (
+                                                            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                                                Created: {col.createdBy} {col.createdAt && `(${new Date(col.createdAt).toLocaleDateString()})`}
+                                                            </Typography>
+                                                        )}
+                                                        {col.updatedBy && (
+                                                            <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                                                Updated: {col.updatedBy} {col.updatedAt && `(${new Date(col.updatedAt).toLocaleDateString()})`}
+                                                            </Typography>
+                                                        )}
+                                                    </Stack>
+                                                </Stack>
                                             }
                                         />
                                         <Chip

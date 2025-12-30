@@ -35,6 +35,12 @@ public class BaseColumnMap {
     @Column(name = "col_link", nullable = false)
     private String colLink;
 
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "version_no")
+    private Integer versionNo = 1;
+
     @Column(name = "add_ts")
     private LocalDateTime addTs;
 
@@ -53,10 +59,16 @@ public class BaseColumnMap {
         if (addUsr == null) {
             addUsr = "system";
         }
+        if (versionNo == null) {
+            versionNo = 1;
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updTs = LocalDateTime.now();
+        if (versionNo != null) {
+            versionNo++;
+        }
     }
 }

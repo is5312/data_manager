@@ -116,11 +116,11 @@ export function useTableData(tableId: string | undefined): UseTableDataResult {
                             setLoadProgress(`Downloading: ${(bytesLoaded / 1024 / 1024).toFixed(1)} MB...`);
                         }
                     } else if (phase === 'inserting') {
-                        // Show grid after first batch!
-                        if (isFirstBatch && currentRows && currentRows > 0) {
-                            console.log(`🎉 First batch loaded! Showing grid with ${currentRows} rows...`);
+                        // Show grid after first batch (even if 0 rows)
+                        if (isFirstBatch) {
+                            console.log(`🎉 First batch loaded! Showing grid with ${currentRows || 0} rows...`);
                             setDataLoaded(true);
-                            setRowCount(currentRows);
+                            setRowCount(currentRows || 0);
                             isFirstBatch = false;
                         } else if (currentRows) {
                             // Update row count as more batches arrive
@@ -129,6 +129,8 @@ export function useTableData(tableId: string | undefined): UseTableDataResult {
                         setLoadProgress(`Loading data: ${currentRows?.toLocaleString() || 0} rows...`);
                     } else if (phase === 'complete') {
                         setLoadProgress('');
+                        // Ensure dataLoaded is set even for empty tables
+                        setDataLoaded(true);
                     }
                 }
             );

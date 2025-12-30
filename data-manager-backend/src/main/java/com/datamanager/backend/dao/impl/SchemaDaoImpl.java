@@ -34,7 +34,10 @@ public class SchemaDaoImpl implements SchemaDao {
 
         dsl.createTableIfNotExists(DSL.name(sanitizedTableName))
                 .column(DSL.name("id"), SQLDataType.BIGINT.identity(true))
-                .column(DSL.name("created_at"), SQLDataType.TIMESTAMP.defaultValue(DSL.currentTimestamp()))
+                .column(DSL.name("add_usr"), SQLDataType.VARCHAR(255).defaultValue(DSL.inline("system")))
+                .column(DSL.name("add_ts"), SQLDataType.TIMESTAMP.defaultValue(DSL.currentTimestamp()))
+                .column(DSL.name("upd_usr"), SQLDataType.VARCHAR(255))
+                .column(DSL.name("upd_ts"), SQLDataType.TIMESTAMP)
                 .constraint(DSL.primaryKey(DSL.name("id")))
                 .execute();
 
@@ -137,7 +140,8 @@ public class SchemaDaoImpl implements SchemaDao {
         String sanitizedColumnName = sanitizeIdentifier(columnName);
         String normalizedTypeSql = normalizeTypeSql(columnType);
 
-        // Use raw SQL for broad Postgres compatibility; identifiers are sanitized and type is whitelisted.
+        // Use raw SQL for broad Postgres compatibility; identifiers are sanitized and
+        // type is whitelisted.
         String sql = String.format("ALTER TABLE %s ALTER COLUMN %s TYPE %s",
                 quoteIdentifier(sanitizedTableName), quoteIdentifier(sanitizedColumnName), normalizedTypeSql);
         dsl.execute(sql);
@@ -169,7 +173,8 @@ public class SchemaDaoImpl implements SchemaDao {
             Integer charLen = r.value3();
             Integer numericScale = r.value4();
 
-            if (columnName == null || dataType == null) continue;
+            if (columnName == null || dataType == null)
+                continue;
             result.put(columnName, normalizeInformationSchemaType(dataType, charLen, numericScale));
         }
         return result;
@@ -197,7 +202,8 @@ public class SchemaDaoImpl implements SchemaDao {
     }
 
     private String normalizeTypeSql(String columnType) {
-        // Validate against supported types (reuse parseColumnType), then return normalized SQL snippet.
+        // Validate against supported types (reuse parseColumnType), then return
+        // normalized SQL snippet.
         // This avoids SQL injection through type strings.
         parseColumnType(columnType);
 

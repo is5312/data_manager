@@ -2,6 +2,12 @@ export interface TableMetadata {
     id: number;
     label: string;
     physicalName: string;
+    description?: string;
+    versionNo?: number;
+    createdAt?: string;
+    createdBy?: string;
+    updatedAt?: string;
+    updatedBy?: string;
 }
 
 export interface ColumnMetadata {
@@ -10,9 +16,13 @@ export interface ColumnMetadata {
     label: string;
     physicalName: string;
     tablePhysicalName: string;
-    createdAt: string;
-    createdBy: string;
     type?: string;
+    description?: string;
+    versionNo?: number;
+    createdAt?: string;
+    createdBy?: string;
+    updatedAt?: string;
+    updatedBy?: string;
 }
 
 export interface BatchUploadResponse {

@@ -21,9 +21,9 @@ public interface DataDao {
      * 
      * @param tableName Physical table name
      * @param rowData   Map of column name to value
-     * @return The ID of the inserted row (if applicable)
+     * @return Map containing id and audit column values
      */
-    Long insertRow(String tableName, Map<String, Object> rowData);
+    Map<String, Object> insertRow(String tableName, Map<String, Object> rowData);
 
     /**
      * Update a row in a physical table
@@ -31,8 +31,9 @@ public interface DataDao {
      * @param tableName Physical table name
      * @param rowId     The ID of the row to update
      * @param rowData   Map of column name to value
+     * @return Map containing audit column values
      */
-    void updateRow(String tableName, Long rowId, Map<String, Object> rowData);
+    Map<String, Object> updateRow(String tableName, Long rowId, Map<String, Object> rowData);
 
     /**
      * Delete a row from a physical table

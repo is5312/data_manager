@@ -135,7 +135,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                     BaseReferenceTable tableEntity = tableRepository.findById(table.getId())
                             .orElseThrow(() -> new IllegalArgumentException("Table not found"));
 
-                    // Map column label -> physical name for inserts (do NOT rely on repository order)
+                    // Map column label -> physical name for inserts (do NOT rely on repository
+                    // order)
                     List<ColumnMetadataDto> createdColumns = getColumnsByTableId(table.getId());
                     Map<String, String> physicalByLabel = createdColumns.stream()
                             .collect(Collectors.toMap(
@@ -155,7 +156,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                             }
 
                             String rawValue = i < record.size() ? record.get(i) : null;
-                            String effectiveType = resolveOverrideTypeByIndex(columnTypes, i).orElse(inferredTypesByLabel.get(label));
+                            String effectiveType = resolveOverrideTypeByIndex(columnTypes, i)
+                                    .orElse(inferredTypesByLabel.get(label));
                             Object typedValue = parseTypedValue(rawValue, effectiveType);
                             if (typedValue != null) {
                                 rowData.put(physical, typedValue);
@@ -179,10 +181,13 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     }
 
     private Optional<String> resolveOverrideTypeByIndex(List<String> columnTypes, int index) {
-        if (columnTypes == null) return Optional.empty();
-        if (index < 0 || index >= columnTypes.size()) return Optional.empty();
+        if (columnTypes == null)
+            return Optional.empty();
+        if (index < 0 || index >= columnTypes.size())
+            return Optional.empty();
         String t = columnTypes.get(index);
-        if (t == null || t.isBlank()) return Optional.empty();
+        if (t == null || t.isBlank())
+            return Optional.empty();
         return Optional.of(t.trim());
     }
 
@@ -223,16 +228,23 @@ public class TableMetadataServiceImpl implements TableMetadataService {
             boolean sawAnyValue = false;
 
             for (CSVRecord record : records) {
-                if (colIndex >= record.size()) continue;
+                if (colIndex >= record.size())
+                    continue;
                 String v = normalizeCell(record.get(colIndex));
-                if (v == null) continue;
+                if (v == null)
+                    continue;
                 sawAnyValue = true;
 
-                if (!isBoolean(v)) allBooleans = false;
-                if (!isInteger(v)) allIntegers = false;
-                if (!isDecimal(v)) allDecimals = false;
-                if (!isDate(v)) allDates = false;
-                if (!isTimestamp(v)) allTimestamps = false;
+                if (!isBoolean(v))
+                    allBooleans = false;
+                if (!isInteger(v))
+                    allIntegers = false;
+                if (!isDecimal(v))
+                    allDecimals = false;
+                if (!isDate(v))
+                    allDates = false;
+                if (!isTimestamp(v))
+                    allTimestamps = false;
             }
 
             // If the column is entirely empty, default to VARCHAR
@@ -262,7 +274,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
 
     private Object parseTypedValue(String rawValue, String inferredType) {
         String v = normalizeCell(rawValue);
-        if (v == null) return null;
+        if (v == null)
+            return null;
 
         String type = inferredType == null ? "VARCHAR" : inferredType.toUpperCase().trim();
         try {
@@ -281,16 +294,20 @@ public class TableMetadataServiceImpl implements TableMetadataService {
     }
 
     private String normalizeCell(String raw) {
-        if (raw == null) return null;
+        if (raw == null)
+            return null;
         String v = raw.trim();
-        if (v.isEmpty()) return null;
-        if (v.equalsIgnoreCase("null")) return null;
+        if (v.isEmpty())
+            return null;
+        if (v.equalsIgnoreCase("null"))
+            return null;
         return v;
     }
 
     private boolean isBoolean(String v) {
         String s = v.trim().toLowerCase();
-        return s.equals("true") || s.equals("false") || s.equals("t") || s.equals("f") || s.equals("yes") || s.equals("no") || s.equals("y") || s.equals("n") || s.equals("1") || s.equals("0");
+        return s.equals("true") || s.equals("false") || s.equals("t") || s.equals("f") || s.equals("yes")
+                || s.equals("no") || s.equals("y") || s.equals("n") || s.equals("1") || s.equals("0");
     }
 
     private Boolean parseBoolean(String v) {
@@ -538,6 +555,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                 .id(entity.getId())
                 .label(entity.getTblLabel())
                 .physicalName(entity.getTblLink())
+                .description(entity.getDescription())
+                .versionNo(entity.getVersionNo())
                 .createdAt(entity.getAddTs())
                 .createdBy(entity.getAddUsr())
                 .updatedAt(entity.getUpdTs())
@@ -556,6 +575,8 @@ public class TableMetadataServiceImpl implements TableMetadataService {
                 .physicalName(entity.getColLink())
                 .tablePhysicalName(entity.getTblLink())
                 .type(type)
+                .description(entity.getDescription())
+                .versionNo(entity.getVersionNo())
                 .createdAt(entity.getAddTs())
                 .createdBy(entity.getAddUsr())
                 .updatedAt(entity.getUpdTs())

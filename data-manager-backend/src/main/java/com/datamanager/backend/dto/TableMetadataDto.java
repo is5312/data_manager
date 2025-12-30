@@ -20,6 +20,8 @@ public class TableMetadataDto {
     private Long id;
     private String label;
     private String physicalName;
+    private String description;
+    private Integer versionNo;
     private LocalDateTime createdAt;
     private String createdBy;
     private LocalDateTime updatedAt;

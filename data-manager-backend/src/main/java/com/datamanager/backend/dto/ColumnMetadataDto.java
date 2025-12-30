@@ -22,6 +22,8 @@ public class ColumnMetadataDto {
     private String physicalName;
     private String tablePhysicalName;
     private String type;
+    private String description;
+    private Integer versionNo;
     private LocalDateTime createdAt;
     private String createdBy;
     private LocalDateTime updatedAt;

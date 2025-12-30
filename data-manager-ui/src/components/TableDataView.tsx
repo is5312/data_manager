@@ -28,15 +28,16 @@ import {
     DialogActions,
     TextField,
     Tooltip,
-    Badge
+    Badge,
+    IconButton
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
     TableChart as TableChartIcon,
-    Refresh as RefreshIcon,
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Save as SaveIcon
+    RefreshOutlined as RefreshIcon,
+    AddOutlined as AddIcon,
+    DeleteOutlined as DeleteIcon,
+    SaveOutlined as SaveIcon
 } from '@mui/icons-material';
 import { queryDuckDB } from '../services/duckdb.service';
 import { useTableData } from '../hooks/useTableData';
@@ -133,9 +134,9 @@ export const TableDataView: React.FC = () => {
         setSaveDialogOpen(true);
     }, [setSaveDialogOpen]);
 
-    const handleConfirmSave = useCallback(() => {
+    const handleConfirmSave = useCallback(async () => {
         if (!id || !tableInfo) return;
-        batchSaveChanges(Number(id), tableInfo.physicalName, gridApi);
+        await batchSaveChanges(Number(id), tableInfo.physicalName, gridApi);
         setSaveDialogOpen(false);
     }, [id, tableInfo, gridApi, batchSaveChanges, setSaveDialogOpen]);
 
@@ -206,17 +207,18 @@ export const TableDataView: React.FC = () => {
 
                     const rows = await queryDuckDB(sql);
 
-                    // Apply pending updates to rows from database
+                    // Apply pending updates to rows
                     const rowsWithUpdates = rows.map(row => {
-                        const rowUpdates = updates.find(u => u.rowId === row.id);
-                        if (rowUpdates) {
-                            const updatedRow = { ...row };
-                            rowUpdates.changes.forEach((cellUpdate, field) => {
-                                updatedRow[field] = cellUpdate.newValue;
-                            });
-                            return updatedRow;
-                        }
-                        return row;
+                        // Find updates for this row
+                        const rowUpdate = updates.find(u => u.rowId === row.id);
+                        if (!rowUpdate) return row;
+
+                        // Apply all pending cell updates for this row
+                        const updatedRow = { ...row };
+                        rowUpdate.changes.forEach((cellUpdate: any, field: string) => {
+                            updatedRow[field] = cellUpdate.newValue;
+                        });
+                        return updatedRow;
                     });
 
                     // Get total row count (use ref to get latest value without recreating datasource)
@@ -290,29 +292,83 @@ export const TableDataView: React.FC = () => {
             }
         ];
 
-        // Add columns based on table schema
-        columns.forEach(col => {
-            defs.push({
-                field: col.physicalName,
-                headerName: col.label.toUpperCase(),
-                minWidth: 150,
-                maxWidth: 400,
-                flex: 1,
-                wrapHeaderText: true,
-                autoHeaderHeight: true,
-                filter: 'agTextColumnFilter',
-                sortable: true,
-                editable: true,
-                cellStyle: DEFAULT_CELL_STYLE,
-                cellClassRules: {
-                    'cell-deleted': (params: CellClassParams) => isRowDeleted(params.data?.id),
-                    'cell-inserted': (params: CellClassParams) => isRowInserted(params.data?.id),
-                    'cell-updated': (params: CellClassParams) =>
-                        !isRowDeleted(params.data?.id) &&
-                        !isRowInserted(params.data?.id) &&
-                        isCellUpdated(params.data?.id, col.physicalName)
-                }
+        // Add user-defined columns (exclude system columns from editing)
+        const systemColumns = ['add_usr', 'add_ts', 'upd_usr', 'upd_ts'];
+        columns
+            .filter(col => !systemColumns.includes(col.physicalName.toLowerCase()))
+            .forEach(col => {
+                defs.push({
+                    field: col.physicalName,
+                    headerName: col.label.toUpperCase(),
+                    minWidth: 150,
+                    maxWidth: 400,
+                    flex: 1,
+                    wrapHeaderText: true,
+                    autoHeaderHeight: true,
+                    filter: 'agTextColumnFilter',
+                    sortable: true,
+                    editable: true,
+                    cellStyle: DEFAULT_CELL_STYLE,
+                    cellClassRules: {
+                        'cell-deleted': (params: CellClassParams) => isRowDeleted(params.data?.id),
+                        'cell-inserted': (params: CellClassParams) => isRowInserted(params.data?.id),
+                        'cell-updated': (params: CellClassParams) =>
+                            !isRowDeleted(params.data?.id) &&
+                            !isRowInserted(params.data?.id) &&
+                            isCellUpdated(params.data?.id, col.physicalName)
+                    }
+                });
             });
+
+        // Add audit columns as read-only at the end
+        const auditColumnStyle = { backgroundColor: '#F5F5F5', color: '#666', fontFamily: 'Roboto Mono', fontSize: '0.75rem' };
+
+        defs.push({
+            field: 'add_usr',
+            headerName: 'CREATED BY',
+            width: 120,
+            editable: false,
+            sortable: true,
+            filter: 'agTextColumnFilter',
+            cellStyle: auditColumnStyle
+        });
+
+        defs.push({
+            field: 'add_ts',
+            headerName: 'CREATED AT',
+            width: 180,
+            editable: false,
+            sortable: true,
+            filter: 'agDateColumnFilter',
+            cellStyle: auditColumnStyle,
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                return new Date(params.value).toLocaleString();
+            }
+        });
+
+        defs.push({
+            field: 'upd_usr',
+            headerName: 'UPDATED BY',
+            width: 120,
+            editable: false,
+            sortable: true,
+            filter: 'agTextColumnFilter',
+            cellStyle: auditColumnStyle
+        });
+
+        defs.push({
+            field: 'upd_ts',
+            headerName: 'UPDATED AT',
+            width: 180,
+            editable: false,
+            sortable: true,
+            filter: 'agDateColumnFilter',
+            cellStyle: auditColumnStyle,
+            valueFormatter: (params) => {
+                if (!params.value) return '';
+                return new Date(params.value).toLocaleString();
+            }
         });
 
         return defs;
@@ -374,56 +430,70 @@ export const TableDataView: React.FC = () => {
                         )}
                     </Stack>
                     <Stack direction="row" spacing={1}>
-                        <Badge
-                            badgeContent={getPendingChangesCount()}
-                            color="warning"
-                            invisible={!hasChanges()}
-                        >
-                            <Button
-                                variant="contained"
-                                color="success"
-                                startIcon={savingChanges ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                                onClick={handleBatchSaveClick}
-                                size="small"
-                                disabled={!dataLoaded || !hasChanges() || savingChanges}
-                                sx={{ borderRadius: 0 }}
+                        <Tooltip title={`Save Changes (${getPendingChangesCount()})`}>
+                            <Badge
+                                badgeContent={getPendingChangesCount()}
+                                color="warning"
+                                invisible={!hasChanges()}
                             >
-                                {savingChanges ? 'SAVING...' : 'SAVE CHANGES'}
-                            </Button>
-                        </Badge>
-                        <Button
-                            variant="contained"
-                            color="error"
-                            startIcon={<DeleteIcon />}
-                            onClick={handleBulkDeleteClick}
-                            size="small"
-                            disabled={!dataLoaded}
-                            style={{ display: selectedCount > 0 ? 'inline-flex' : 'none' }}
-                            sx={{ borderRadius: 0 }}
-                        >
-                            DELETE ({selectedCount})
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<AddIcon />}
-                            onClick={handleSaveRow}
-                            size="small"
-                            disabled={!dataLoaded}
-                            sx={{ borderRadius: 0 }}
-                        >
-                            ADD ROW
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            onClick={handleRefresh}
-                            size="small"
-                            disabled={!dataLoaded}
-                            startIcon={<RefreshIcon />}
-                            sx={{ minWidth: 'auto', px: 1.5 }}
-                        >
-                            REFRESH
-                        </Button>
+                                <span style={{ display: 'inline-flex' }}> {/* Wrapper for disabled state tooltip */}
+                                    <IconButton
+                                        color="success"
+                                        onClick={handleBatchSaveClick}
+                                        disabled={!dataLoaded || !hasChanges() || savingChanges}
+                                        size="small"
+                                        sx={{
+                                            borderRadius: 1,
+                                            border: '1px solid',
+                                            borderColor: hasChanges() && !savingChanges ? 'success.light' : 'transparent'
+                                        }}
+                                    >
+                                        {savingChanges ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                                    </IconButton>
+                                </span>
+                            </Badge>
+                        </Tooltip>
+
+                        {selectedCount > 0 && (
+                            <Tooltip title={`Delete Selected (${selectedCount})`}>
+                                <IconButton
+                                    color="error"
+                                    onClick={handleBulkDeleteClick}
+                                    disabled={!dataLoaded}
+                                    size="small"
+                                    sx={{
+                                        borderRadius: 1,
+                                        border: '1px solid',
+                                        borderColor: 'error.light'
+                                    }}
+                                >
+                                    <DeleteIcon />
+                                </IconButton>
+                            </Tooltip>
+                        )}
+
+                        <Tooltip title="Add Row">
+                            <IconButton
+                                color="primary"
+                                onClick={handleSaveRow}
+                                disabled={!dataLoaded}
+                                size="small"
+                                sx={{ borderRadius: 1 }}
+                            >
+                                <AddIcon />
+                            </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Refresh Data">
+                            <IconButton
+                                onClick={handleRefresh}
+                                disabled={!dataLoaded}
+                                size="small"
+                                sx={{ borderRadius: 1 }}
+                            >
+                                <RefreshIcon />
+                            </IconButton>
+                        </Tooltip>
                     </Stack>
                 </Box>
 
@@ -483,6 +553,10 @@ export const TableDataView: React.FC = () => {
                         <>
                             <AgGridReact
                                 columnDefs={colDefs}
+                                defaultColDef={{
+                                    wrapHeaderText: true,
+                                    autoHeaderHeight: true
+                                }}
                                 rowModelType={'serverSide'}
                                 serverSideDatasource={createServerSideDatasource()}
                                 pagination={true}

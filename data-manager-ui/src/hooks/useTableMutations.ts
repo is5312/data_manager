@@ -8,7 +8,8 @@ import {
 import {
     executeUpdate,
     executeInsert,
-    executeDelete
+    executeDelete,
+    queryDuckDB
 } from '../services/duckdb.service';
 import { useTableEditStore } from '../stores/tableEditStore';
 
@@ -168,24 +169,25 @@ export function useTableMutations(): UseTableMutationsResult {
                 return;
             }
 
-            // Refresh the grid to show the new row from datasource
+            // Refresh grid view (without purging cache if possible to keep DuckDB data)
             if (gridApi) {
+                gridApi.clearFocusedCell();
+                // Important: purge: false tells AG Grid to keep existing data and just refresh rows
+                // Since we already updated DuckDB, it should pull from there
                 gridApi.refreshServerSide({ purge: false });
-
-                // Start editing the first editable cell of the new row
-                setTimeout(() => {
-                    const columns = gridApi.getColumns();
-                    const firstEditableCol = columns?.find(col =>
-                        col.getColDef().editable && col.getColId() !== 'id'
-                    );
-                    if (firstEditableCol) {
-                        gridApi.startEditingCell({
-                            rowIndex: 0,
-                            colKey: firstEditableCol.getColId()
-                        });
-                    }
-                }, 200);
-            }
+            }     // Start editing the first editable cell of the new row
+            setTimeout(() => {
+                const columns = gridApi.getColumns();
+                const firstEditableCol = columns?.find(col =>
+                    col.getColDef().editable && col.getColId() !== 'id'
+                );
+                if (firstEditableCol) {
+                    gridApi.startEditingCell({
+                        rowIndex: 0,
+                        colKey: firstEditableCol.getColId()
+                    });
+                }
+            }, 200);
 
             setSnackbar({ open: true, message: 'Empty row added - start editing', severity: 'info' });
         } catch (err) {
@@ -215,70 +217,109 @@ export function useTableMutations(): UseTableMutationsResult {
 
             console.log('Saving changes:', { inserts, updates, deletes });
 
-            // 1. Process Inserts
-            const insertPromises = inserts.map(async ({ tempId, data }) => {
-                const result = await insertTableRow(tableId, data);
-                const newRow = { ...data, id: result.id };
-                await executeInsert(tableName, newRow);
-                return { tempId, realId: result.id, data: newRow };
-            });
+            let insertResults: Array<{ tempId: string | number; realId: number; data: any }> = [];
 
-            const insertResults = await Promise.all(insertPromises);
+            // Helper to convert ISO timestamp strings to Date objects for DuckDB TIMESTAMP_MS
+            const toTimestamp = (isoString: string | null | undefined): Date | null => {
+                if (!isoString) return null;
+                return new Date(isoString);
+            };
 
-            // Update grid with real IDs
-            if (gridApi) {
-                insertResults.forEach(({ tempId, realId, data }) => {
-                    // Remove temp row
-                    gridApi.applyServerSideTransactionAsync({
-                        remove: [{ id: tempId }]
-                    });
-                    // Add real row
-                    gridApi.applyServerSideTransactionAsync({
-                        add: [data]
-                    });
+            // 1. Process Inserts (only if there are any)
+            if (inserts.length > 0) {
+                const insertPromises = inserts.map(async ({ tempId, data }) => {
+                    const result = await insertTableRow(tableId, data);
+
+
+                    // Build complete row with user data + audit columns from backend
+                    // Convert ISO timestamp strings to Date objects for DuckDB TIMESTAMP_MS
+                    const completeRow = {
+                        ...data,
+                        id: result.id,
+                        add_usr: (result as any).add_usr,
+                        add_ts: toTimestamp((result as any).add_ts),
+                        upd_usr: (result as any).upd_usr,
+                        upd_ts: toTimestamp((result as any).upd_ts)
+                    };
+
+                    // Insert complete row into DuckDB
+                    await executeInsert(tableName, completeRow);
+
+                    return { tempId, realId: result.id, data: completeRow };
                 });
-            }
 
-            // 2. Process Updates
-            const updatePromises = updates.map(async ({ rowId, changes }) => {
-                const updateData: Record<string, any> = {};
-                changes.forEach((cellUpdate, field) => {
-                    updateData[field] = cellUpdate.newValue;
-                });
+                insertResults = await Promise.all(insertPromises);
 
-                await updateTableRow(tableId, Number(rowId), updateData);
-
-                // Update DuckDB for each field
-                for (const [field, cellUpdate] of changes.entries()) {
-                    await executeUpdate(tableName, Number(rowId), field, cellUpdate.newValue);
+                // Update grid with real IDs
+                if (gridApi) {
+                    insertResults.forEach(({ tempId, realId, data }) => {
+                        // Remove temp row
+                        gridApi.applyServerSideTransactionAsync({
+                            remove: [{ id: tempId }]
+                        });
+                        // Add real row
+                        gridApi.applyServerSideTransactionAsync({
+                            add: [data]
+                        });
+                    });
                 }
-            });
-
-            await Promise.all(updatePromises);
-
-            // 3. Process Deletes
-            const deletePromises = deletes.map(async (rowId) => {
-                await deleteTableRow(tableId, Number(rowId));
-                await executeDelete(tableName, Number(rowId));
-            });
-
-            await Promise.all(deletePromises);
-
-            // Remove deleted rows from grid
-            if (gridApi && deletes.length > 0) {
-                const rowsToRemove = deletes.map(id => ({ id }));
-                gridApi.applyServerSideTransactionAsync({
-                    remove: rowsToRemove
-                });
             }
 
+            // 2. Process Updates (only if there are any)
+            if (updates.length > 0) {
+                const updatePromises = updates.map(async ({ rowId, changes }) => {
+                    const updateData: Record<string, any> = {};
+                    changes.forEach((cellUpdate, field) => {
+                        updateData[field] = cellUpdate.newValue;
+                    });
+
+                    // Fetch original row from DuckDB
+                    const originalRows = await queryDuckDB(`SELECT * FROM "${tableName}" WHERE id = ${rowId}`);
+                    const originalRow = originalRows[0] || {};
+
+                    const updatedRow = await updateTableRow(tableId, Number(rowId), updateData);
+
+                    // Build complete row with updated data + audit columns from backend
+                    // Convert ISO timestamp strings to Date objects for DuckDB TIMESTAMP_MS
+                    const completeRow = {
+                        ...originalRow,
+                        ...updateData,
+                        add_usr: (updatedRow as any).add_usr,
+                        add_ts: toTimestamp((updatedRow as any).add_ts),
+                        upd_usr: (updatedRow as any).upd_usr,
+                        upd_ts: toTimestamp((updatedRow as any).upd_ts)
+                    };
+
+                    // Update DuckDB with complete row data (includes audit columns)
+                    await executeDelete(tableName, Number(rowId));
+                    await executeInsert(tableName, completeRow);
+                });
+
+                await Promise.all(updatePromises);
+            }
+
+            // 3. Process Deletes (only if there are any)
+            if (deletes.length > 0) {
+                const deletePromises = deletes.map(async (rowId) => {
+                    await deleteTableRow(tableId, Number(rowId));
+                    await executeDelete(tableName, Number(rowId));
+                });
+
+                await Promise.all(deletePromises);
+
+                // Remove deleted rows from grid
+                if (gridApi) {
+                    const rowsToRemove = deletes.map(id => ({ id }));
+                    gridApi.applyServerSideTransactionAsync({
+                        remove: rowsToRemove
+                    });
+                }
+            }
             // Clear the store
             clearChanges();
 
-            // Refresh grid to remove styling
-            if (gridApi) {
-                gridApi.refreshCells({ force: true });
-            }
+            // Note: User should manually refresh (F5 or refresh button) to see audit columns
+            // Automatic refresh was causing infinite loops
 
             setSnackbar({
                 open: true,

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AgGridReact } from 'ag-grid-react';
 import {
-    ModuleRegistry, 
+    ModuleRegistry,
     ClientSideRowModelModule,
     PaginationModule,
     ColDef
@@ -158,10 +158,14 @@ export const TableDetails: React.FC = () => {
                         <AgGridReact
                             rowData={columns}
                             columnDefs={colDefs}
+                            defaultColDef={{
+                                wrapHeaderText: true,
+                                autoHeaderHeight: true
+                            }}
                             pagination={true}
                             paginationPageSize={100}
                             rowHeight={32}
-                            headerHeight={32}
+                            headerHeight={60}
                         />
                     )}
                 </Paper>
