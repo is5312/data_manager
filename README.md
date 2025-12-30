@@ -41,13 +41,18 @@ Frontend will run on: **http://localhost:5173**
 - ✅ **Dynamic Column Creation**: Add columns with type validation
 - ✅ **REST API**: Full CRUD endpoints for table and column management
 - ✅ **Modern UI**: React + TypeScript + AG Grid with dark theme
-- ✅ **DuckDB WASM**: Initialized for client-side data operations
+- ✅ **DuckDB WASM**: High-performance client-side SQL engine for:
+  - Local data caching and querying
+  - Instant sorting/filtering without backend hits
+  - Live row counts for accurate pagination
 - ✅ **Table Data Editing**: In-memory editing with inserts, updates, and deletes
+- ✅ **Audit Columns**: Automatic tracking of `add_usr`, `add_ts`, `upd_usr`, `upd_ts`
 - ✅ **Pending Changes**: Visual feedback for unsaved changes (Green/Yellow/Red)
 - ✅ **CORS Support**: Frontend-backend communication configured
 
 ### Architecture Highlights
 - **Physical Tables**: `tbl_<uuid>` (e.g., `tbl_a1b2c3d4`)
+  - Includes audit columns: `add_usr`, `add_ts`, `upd_usr`, `upd_ts`
 - **Physical Columns**: `col_<uuid>` (e.g., `col_m3n4o5p6`)
 - **Logical Layer**: Stored in `base_reference_table` and `base_column_map`
 - **User Experience**: Users only see logical names (e.g., "Customers", "Email")
@@ -60,6 +65,7 @@ data_manager/
 │   ├── src/main/java/
 │   │   └── com/datamanager/backend/
 │   │       ├── schema/         # Table/column management
+│   │       ├── dao/            # Dynamic SQL (JOOQ)
 │   │       └── config/         # CORS & config
 │   └── src/main/resources/
 │       ├── application.yml     # Database config
@@ -69,6 +75,7 @@ data_manager/
 │   ├── src/
 │   │   ├── components/         # LandingPage with AG Grid
 │   │   ├── services/           # API client
+│   │   ├── hooks/              # Data mutation logic
 │   │   └── utils/              # DuckDB WASM setup
 │   └── vite.config.ts          # Proxy & CORS headers
 └── ARCHITECTURE.md             # Detailed architecture docs
@@ -103,7 +110,9 @@ data_manager/
   {
     "id": 1,
     "label": "Customers",
-    "physicalName": "tbl_a1b2c3d4"
+    "physicalName": "tbl_a1b2c3d4",
+    "description": "Customer records",
+    "versionNo": 1
   }
 ]
 ```
@@ -156,11 +165,11 @@ The UI follows modern web design best practices:
 
 ## 🚧 Next Steps
 
-- [ ] Add pagination and filtering to the grid
-- [ ] Implement table data editing (rows/cells)
-- [ ] Add column type management UI
-- [ ] Integrate DuckDB for client-side analytics
-- [ ] Implement table deletion functionality
+- [x] Implement table data editing (rows/cells)
+- [x] Integrate DuckDB for client-side analytics
+- [x] Add pagination and filtering to the grid interface
+- [x] Implement table deletion functionality
+- [ ] Implement column management for existing tables (add/remove/edit)
 - [ ] Implement user authentication
 
 ## 📝 License

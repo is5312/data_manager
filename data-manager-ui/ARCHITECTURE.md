@@ -61,6 +61,7 @@ data-manager-ui/
 3. Inserts data into a local DuckDB table.
 4. Grid requests rows via `serverSideDatasource`.
 5. Datasource merges Store changes + DuckDB data → Grid.
+6. **Smart Count**: Datasource queries `SELECT COUNT(*)` to ensure accurate pagination.
 
 ### Editing Data
 1. **User Action**: Single-click cell edit, Add Row, or Delete Row.
@@ -77,10 +78,15 @@ data-manager-ui/
 1. User clicks "Save Changes".
 2. **Confirmation**: Dialog shows count of inserts/updates/deletes.
 3. **Execution** (`useTableMutations`):
-   - Calls backend API for each change (or batch endpoint).
-   - On success: Clears `tableEditStore`.
-   - On failure: Shows error snackbar, keeps pending changes.
-4. **Refresh**: Reloads data from backend to DuckDB to ensure consistency.
+   - Backend: Calls optimized `insertRow`/`updateRow` endpoints.
+   - Local Sync: Updates DuckDB with returned row data (ID, audit columns).
+   - Clear Store: Removes pending changes.
+4. **Refresh**: `gridApi.refreshServerSide({ purge: true })` triggers fast reload from local DuckDB.
+
+## Optimizations
+- **Live Row Counts**: Grid datasource always queries `COUNT(*)` from DuckDB to handle insertions correctly.
+- **Local Refresh**: Saving updates DuckDB locally and purges grid cache, avoiding full backend re-fetch.
+- **Audit Columns**: Backend calculates and returns `add_ts`, `upd_ts` etc., which are synced to DuckDB immediately.
 
 ## Design System
 - **Theme**: Custom Dark Mode with specific semantic colors.

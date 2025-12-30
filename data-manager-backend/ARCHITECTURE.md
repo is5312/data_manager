@@ -183,8 +183,11 @@ public interface BaseReferenceTableRepository
 - Type-safe DDL operations
 - Dynamic table creation
 - Dynamic column management
--No need for ORM mapping
+- No need for ORM mapping
 - Direct SQL control
+
+**Optimizations:**
+- **Single-Query Operations**: `insertRow` and `updateRow` now explicitly set audit columns (`add_ts`, `upd_ts`, etc.) and return the result in a single query loop, eliminating redundant `SELECT` fetches.
 
 **Example:**
 ```java
@@ -193,6 +196,8 @@ public class SchemaDaoImpl implements SchemaDao {
     public void createTable(String tableName) {
         dsl.createTableIfNotExists(table(name(tableName)))
             .column(field(name("id")), SQLDataType.BIGINT.identity(true))
+            .column(field(name("add_ts")), SQLDataType.TIMESTAMP.defaultValue(DSL.currentTimestamp())) 
+            // ... other audit columns
             .execute();
     }
 }

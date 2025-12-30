@@ -32,6 +32,11 @@
 - **Safety**: Hard limit of 50 pending changes prevents memory issues
 - **Commit**: Batch save operation persists changes to backend in one go
 
+### 5. Frontend Optimizations
+- **Smart Refresh**: `TableDataView` queries live row counts from DuckDB (`SELECT COUNT(*)`) to ensure new rows appear immediately.
+- **Efficient Caching**: `batchSaveChanges` uses `purge: true` to force grid refresh from local DuckDB (fast) instead of redundant backend fetches.
+- **Backend Sync**: `insertRow`/`updateRow` return full row data (including audit columns) to avoid extra round-trips.
+
 ## Technology Stack
 
 ### Backend
@@ -48,13 +53,14 @@
 - **UI Library**: Material UI (MUI) v5 - Dark theme with customization
 - **State Management**: Zustand + Immer (Change buffering)
 - **Data Grid**: AG Grid Community (requires ModuleRegistry.registerModules)
-- **Client DB**: DuckDB WASM
+- **Client DB**: DuckDB WASM (Primary data source for grid)
 - **Styling**: MUI theming + custom theme with dark mode, glassmorphism, gradients
 
 ### Frontend-Backend Communication
 - **Proxy**: Vite proxies `/api/*` to `http://localhost:8080`
 - **CORS**: Configured in `WebConfig.java` for localhost:5173, localhost:3000
 - **API Base**: `/api/schema`
+- **Protocol**: REST + JSON
 
 ## Key Design Decisions
 
@@ -85,6 +91,13 @@
 **Impact**: Consistent component API, built-in theming, responsive design out of the box  
 **Theme**: Dark mode with glassmorphism effects, custom color palette (blues/purples)
 
+### Decision 6: Local DuckDB as Source of Truth for Grid
+**Reason**: To enable instant filtering, sorting, and pagination without hitting backend repeatedly.
+**Solution**: 
+- Load data from backend -> Insert into DuckDB
+- Grid queries DuckDB via Server-Side Row Model (SSRM)
+- On Save: Update Backend -> Update DuckDB -> Refresh Grid (from DuckDB)
+
 ## Critical Files
 
 ### Backend
@@ -93,16 +106,20 @@
 - `SchemaRepository.java`: DDL operations on physical tables
 - `SchemaHelpers.java`: SQL identifier sanitization
 - `application.yml`: Database config (postgres/changeme)
+- `DataDaoImpl.java`: Dynamic CRUD operations with optimized SQL
 
 ### Frontend
 - `LandingPage.tsx`: Main UI with AG Grid
+- `TableDataView.tsx`: Data grid logic, SSRM datasource, DuckDB queries
+- `useTableMutations.ts`: Optimized batch saving and refresh logic
 - `api.ts`: REST client
 - `duckdb.ts`: DuckDB WASM initialization
 - `vite.config.ts`: Proxy + COOP/COEP headers for DuckDB
 
 ### Database
-- `schema.sql`: Metadata tables (base_reference_table, base_column_map)
+- `schema.sql`: Metadata tables (base_reference_table, base_column_map) with audit columns
 - `data.sql`: Seed data (3 tables: Customers, Orders, Products)
+- Physical Tables: `tbl_xxx` with audit columns (`add_usr`, `add_ts`, `upd_usr`, `upd_ts`)
 
 ## Development Workflows
 
