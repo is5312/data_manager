@@ -54,7 +54,7 @@ public class CsvBatchUploadService {
         this.objectMapper = objectMapper;
     }
 
-    public BatchUploadResponseDto startBatchUpload(MultipartFile file, String tableName,
+    public BatchUploadResponseDto startBatchUpload(MultipartFile file, String tableName, String deploymentType,
             List<String> columnTypesOverride, List<Integer> selectedColumnIndices, Character delimiter,
             Character quoteChar, Character escapeChar) {
         if (file == null || file.isEmpty()) {
@@ -77,8 +77,16 @@ public class CsvBatchUploadService {
 
         List<String> finalTypes = applyTypeOverrides(peek.inferredTypes, columnTypesOverride);
 
+        // Validate deployment type
+        if (deploymentType == null || deploymentType.isBlank()) {
+            deploymentType = "RUN_TIME";
+        }
+        if (!deploymentType.equals("RUN_TIME") && !deploymentType.equals("DESIGN_TIME")) {
+            throw new IllegalArgumentException("Deployment type must be either 'RUN_TIME' or 'DESIGN_TIME'");
+        }
+
         // Create table + columns in header order (label = normalized header)
-        TableMetadataDto table = tableMetadataService.createTable(tableName.trim());
+        TableMetadataDto table = tableMetadataService.createTable(tableName.trim(), deploymentType);
         List<String> physicalColumns = new ArrayList<>();
 
         for (int i = 0; i < peek.headers.size(); i++) {

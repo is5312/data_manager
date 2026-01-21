@@ -43,6 +43,7 @@ import { queryDuckDB } from '../services/duckdb.service';
 import { useTableData } from '../hooks/useTableData';
 import { useTableMutations } from '../hooks/useTableMutations';
 import { useTableEditStore } from '../stores/tableEditStore';
+import { NavigationBar } from './NavigationBar';
 import './LandingPage.css';
 import './TableEditStyles.css';
 
@@ -407,8 +408,9 @@ export const TableDataView: React.FC = () => {
     }, [gridApi]);
 
     return (
-        <Box sx={{ minHeight: '100vh', background: '#FFFFFF', pt: 1.5 }}>
-            <Container maxWidth="xl">
+        <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
+            <NavigationBar />
+            <Container maxWidth="xl" sx={{ pt: 1.5 }}>
                 {/* Header */}
                 <Box sx={{
                     borderBottom: '1px solid #E0E0E0',

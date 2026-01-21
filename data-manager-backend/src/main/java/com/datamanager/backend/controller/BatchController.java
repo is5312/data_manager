@@ -47,6 +47,7 @@ public class BatchController {
     public ResponseEntity<BatchUploadResponseDto> batchUploadCsv(
             @RequestParam("file") MultipartFile file,
             @RequestParam("tableName") String tableName,
+            @RequestParam(value = "deploymentType", required = false, defaultValue = "RUN_TIME") String deploymentType,
             @RequestParam(value = "columnTypes", required = false) String columnTypesJson,
             @RequestParam(value = "selectedColumnIndices", required = false) String selectedColumnIndicesJson,
             @RequestParam(value = "delimiter", required = false) Character delimiter,
@@ -77,8 +78,8 @@ public class BatchController {
             throw new IllegalArgumentException("Invalid selectedColumnIndices JSON; expected an array of integers");
         }
 
-        BatchUploadResponseDto response = csvBatchUploadService.startBatchUpload(file, tableName, columnTypes,
-                selectedColumnIndices, delimiter, quoteChar, escapeChar);
+        BatchUploadResponseDto response = csvBatchUploadService.startBatchUpload(file, tableName, deploymentType,
+                columnTypes, selectedColumnIndices, delimiter, quoteChar, escapeChar);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

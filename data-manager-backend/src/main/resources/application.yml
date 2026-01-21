@@ -1,18 +1,21 @@
 spring:
   application:
-    name: data-manager-backend
-  
+    name: Data Manager Backend
+    version: 1.0.0
+
   servlet:
     multipart:
       # Allow large CSV/GZIP uploads (batch job will process asynchronously)
       max-file-size: 2GB
       max-request-size: 2GB
 
-  datasource:
+  # Primary datasource configuration (custom prefix to avoid auto-configuration conflicts)
+  primary-datasource:
     url: jdbc:postgresql://localhost:5432/datamanager?reWriteBatchedInserts=true
     username: postgres
     password: changeme
     driver-class-name: org.postgresql.Driver
+    type: com.zaxxer.hikari.HikariDataSource
     hikari:
       maximum-pool-size: 20
       connection-timeout: 30000
@@ -39,6 +42,10 @@ spring:
     locations: classpath:db/migration
     schemas: public
     validate-on-migrate: true
+    # Explicitly use primary datasource
+    url: ${spring.primary-datasource.url}
+    user: ${spring.primary-datasource.username}
+    password: ${spring.primary-datasource.password}
   
   sql:
     init:
@@ -61,6 +68,32 @@ spring:
 # JOOQ Configuration
 jooq:
   sql-dialect: POSTGRES
+
+# Migration Configuration
+migration:
+  default-schema: public
+  available-schemas:
+    - public
+    - dmgr
+
+# JobRunr Configuration (v8+ uses 'jobrunr' prefix instead of 'org.jobrunr')
+jobrunr:
+  background-job-server:
+    enabled: true
+    worker-count: 4
+  dashboard:
+    enabled: true
+    port: 8000  # Dashboard will run on port 8000
+  database:
+    type: sql
+  jobs:
+    default-number-of-retries: 0  # No automatic retries
+
+# gRPC Server Configuration
+grpc:
+  server:
+    port: 9090
+    enable-reflection: true  # Enable reflection for testing with grpcurl/grpcui
 
 # Logging
 logging:

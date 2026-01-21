@@ -30,6 +30,7 @@ public class MetadataMapper {
                 .physicalName(entity.getTblLink())
                 .description(entity.getDescription())
                 .versionNo(entity.getVersionNo())
+                .deploymentType(entity.getDeploymentType())
                 .createdAt(entity.getAddTs())
                 .createdBy(entity.getAddUsr())
                 .updatedAt(entity.getUpdTs())

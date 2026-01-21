@@ -51,7 +51,7 @@ public class CsvImportJobConfig {
                 // Skip rows that fail due to size/data errors (e.g., row too big)
                 .faultTolerant()
                 .skip(org.springframework.dao.DataAccessException.class)
-                .skipLimit(10000) // Allow skipping up to 10,000 bad rows
+                .skipLimit(100) // Allow skipping up to 100 bad rows
                 .build();
     }
 
@@ -69,7 +69,7 @@ public class CsvImportJobConfig {
             com.datamanager.backend.service.TableMetadataService tableMetadataService) {
         // Fetch columns from database (avoids VARCHAR(2500) limit for large column
         // counts)
-        List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
+        List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId, null);
 
         List<String> physicalColumns = columns.stream()
                 .map(com.datamanager.backend.dto.ColumnMetadataDto::getPhysicalName)
@@ -110,7 +110,7 @@ public class CsvImportJobConfig {
             @Value("#{jobParameters['physicalTableName']}") String physicalTableName,
             com.datamanager.backend.service.TableMetadataService tableMetadataService) {
         // Fetch columns from database
-        List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
+        List<com.datamanager.backend.dto.ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId, null);
         List<String> physicalColumns = columns.stream()
                 .map(com.datamanager.backend.dto.ColumnMetadataDto::getPhysicalName)
                 .toList();

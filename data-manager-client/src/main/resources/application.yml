@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: data-manager-client
+
+# gRPC Client Configuration
+# See: https://grpc-ecosystem.github.io/grpc-spring/en/
+grpc:
+  client:
+    dataOperations:
+      address: 'static://localhost:9090'
+      negotiationType: PLAINTEXT
+      # Optional: Connection settings
+      # max-inbound-message-size: 10485760  # 10MB
+      # deadline: 30s
+      # keepAliveTime: 30s
+      # keepAliveTimeout: 10s
+
+logging:
+  level:
+    com.datamanager.client: INFO
+    net.devh.boot.grpc.client: DEBUG

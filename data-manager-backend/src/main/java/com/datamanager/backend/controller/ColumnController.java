@@ -28,9 +28,11 @@ public class ColumnController {
      * Get all columns for a table
      */
     @GetMapping
-    public ResponseEntity<List<ColumnMetadataDto>> getColumns(@PathVariable Long tableId) {
-        log.info("GET /api/schema/tables/{}/columns - Fetching columns", tableId);
-        List<ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId);
+    public ResponseEntity<List<ColumnMetadataDto>> getColumns(
+            @PathVariable Long tableId,
+            @RequestParam(required = false) String schema) {
+        log.info("GET /api/schema/tables/{}/columns - Fetching columns from schema: {}", tableId, schema);
+        List<ColumnMetadataDto> columns = tableMetadataService.getColumnsByTableId(tableId, schema);
         return ResponseEntity.ok(columns);
     }
 

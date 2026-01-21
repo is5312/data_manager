@@ -35,6 +35,9 @@ public class BaseReferenceTable {
     @Column(name = "version_no")
     private Integer versionNo = 1;
 
+    @Column(name = "deployment_type")
+    private String deploymentType = "DESIGN_TIME";
+
     @Column(name = "add_ts")
     private LocalDateTime addTs;
 

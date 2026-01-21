@@ -1,12 +1,70 @@
 plugins {
     id 'java'
     id 'java-library'
+    id 'org.springframework.boot' version '3.4.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.google.protobuf' version '0.9.4'
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'com.datamanager.client.DataOperationsClientApplication'
 }
 
 dependencies {
-    // gRPC dependencies will go here
-    implementation 'io.grpc:grpc-netty-shaded:1.60.0'
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter'
+    
+    // gRPC Spring Boot Starter
+    implementation 'net.devh:grpc-client-spring-boot-starter:3.1.0.RELEASE'
+    
+    // gRPC dependencies (provided by grpc-spring-boot-starter, but explicit for clarity)
     implementation 'io.grpc:grpc-protobuf:1.60.0'
     implementation 'io.grpc:grpc-stub:1.60.0'
-    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+    implementation 'com.google.protobuf:protobuf-java:3.25.1'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation 'io.grpc:grpc-testing:1.60.0'
+    testImplementation 'io.grpc:grpc-inprocess:1.60.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Protobuf configuration
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.1'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.60.0'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
 }

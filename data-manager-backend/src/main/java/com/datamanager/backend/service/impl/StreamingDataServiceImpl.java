@@ -1,5 +1,7 @@
 package com.datamanager.backend.service.impl;
 
+import com.datamanager.backend.config.MigrationProperties;
+import com.datamanager.backend.dao.SchemaDao;
 import com.datamanager.backend.entity.BaseReferenceTable;
 import com.datamanager.backend.repository.BaseReferenceTableRepository;
 import com.datamanager.backend.service.StreamingDataService;
@@ -15,6 +17,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.List;
 
 /**
  * Service implementation for streaming data operations
@@ -24,25 +27,30 @@ import java.sql.ResultSet;
 public class StreamingDataServiceImpl implements StreamingDataService {
 
     private final BaseReferenceTableRepository tableRepository;
+    private final SchemaDao schemaDao;
+    private final MigrationProperties migrationProperties;
     private final DataSource dataSource;
     private final DataSource arrowDataSource;
 
     public StreamingDataServiceImpl(
             BaseReferenceTableRepository tableRepository,
+            SchemaDao schemaDao,
+            MigrationProperties migrationProperties,
             DataSource dataSource,
             @Qualifier("arrowDataSource") DataSource arrowDataSource) {
         this.tableRepository = tableRepository;
+        this.schemaDao = schemaDao;
+        this.migrationProperties = migrationProperties;
         this.dataSource = dataSource;
         this.arrowDataSource = arrowDataSource;
     }
 
     @Override
-    public StreamingResponseBody streamTableDataAsCsv(Long tableId) {
-        log.info("Streaming table data as CSV for table ID: {}", tableId);
+    public StreamingResponseBody streamTableDataAsCsv(Long tableId, String schemaName) {
+        final String finalSchemaName = (schemaName == null || schemaName.isBlank()) ? "public" : schemaName;
+        log.info("Streaming table data as CSV for table ID: {} from schema: {}", tableId, finalSchemaName);
 
-        BaseReferenceTable table = tableRepository.findById(tableId)
-                .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
-
+        BaseReferenceTable table = getTableFromSchema(tableId, finalSchemaName);
         final String tableName = table.getTblLink();
 
         return outputStream -> {
@@ -50,17 +58,19 @@ public class StreamingDataServiceImpl implements StreamingDataService {
                 // Use PostgreSQL's COPY command for maximum performance
                 CopyManager copyManager = new CopyManager(conn.unwrap(BaseConnection.class));
 
-                // Quote table name to handle mixed-case identifiers
-                String quotedTableName = "\"" + table.getTblLink().replace("\"", "\"\"") + "\"";
+                // Quote schema and table name to handle mixed-case identifiers
+                String quotedSchema = "\"" + finalSchemaName.replace("\"", "\"\"") + "\"";
+                String quotedTable = "\"" + tableName.replace("\"", "\"\"") + "\"";
+                String schemaQualifiedTable = quotedSchema + "." + quotedTable;
 
                 // COPY command with CSV format (includes header row)
                 String copySQL = String.format(
                         "COPY %s TO STDOUT WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',', QUOTE '\"', ESCAPE '\"')",
-                        quotedTableName);
+                        schemaQualifiedTable);
 
                 log.info("Executing COPY command: {}", copySQL);
                 long rowCount = copyManager.copyOut(copySQL, outputStream);
-                log.info("Streamed {} rows for table {}", rowCount, tableName);
+                log.info("Streamed {} rows for table {}.{}", rowCount, finalSchemaName, tableName);
 
             } catch (Exception e) {
                 log.error("Error streaming table data as CSV", e);
@@ -70,12 +80,11 @@ public class StreamingDataServiceImpl implements StreamingDataService {
     }
 
     @Override
-    public StreamingResponseBody streamTableDataAsArrow(Long tableId) {
-        log.info("Streaming table data as Arrow for table ID: {}", tableId);
+    public StreamingResponseBody streamTableDataAsArrow(Long tableId, String schemaName) {
+        final String finalSchemaName = (schemaName == null || schemaName.isBlank()) ? "public" : schemaName;
+        log.info("Streaming table data as Arrow for table ID: {} from schema: {}", tableId, finalSchemaName);
 
-        BaseReferenceTable table = tableRepository.findById(tableId)
-                .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
-
+        BaseReferenceTable table = getTableFromSchema(tableId, finalSchemaName);
         final String tableName = table.getTblLink();
 
         return outputStream -> {
@@ -88,9 +97,11 @@ public class StreamingDataServiceImpl implements StreamingDataService {
                 conn = arrowDataSource.getConnection();
                 conn.setAutoCommit(false); // Required for fetch size to work
 
-                // Quote table name to handle mixed-case identifiers
-                String quotedTableName = "\"" + tableName.replace("\"", "\"\"") + "\"";
-                String sql = "SELECT * FROM " + quotedTableName;
+                // Quote schema and table name to handle mixed-case identifiers
+                String quotedSchema = "\"" + finalSchemaName.replace("\"", "\"\"") + "\"";
+                String quotedTable = "\"" + tableName.replace("\"", "\"\"") + "\"";
+                String schemaQualifiedTable = quotedSchema + "." + quotedTable;
+                String sql = "SELECT * FROM " + schemaQualifiedTable;
 
                 log.info("Executing query for Arrow streaming: {}", sql);
 
@@ -102,7 +113,7 @@ public class StreamingDataServiceImpl implements StreamingDataService {
                 // Stream ResultSet as Arrow IPC format
                 long rowCount = ArrowStreamingUtil.streamResultSetAsArrow(rs, outputStream);
 
-                log.info("Streamed {} rows as Arrow for table {}", rowCount, tableName);
+                log.info("Streamed {} rows as Arrow for table {}.{}", rowCount, finalSchemaName, tableName);
 
             } catch (Exception e) {
                 log.error("Error streaming table data as Arrow", e);
@@ -124,15 +135,20 @@ public class StreamingDataServiceImpl implements StreamingDataService {
     }
 
     @Override
-    public long getTableRowCount(Long tableId) {
-        log.debug("Getting row count for table ID: {}", tableId);
+    public long getTableRowCount(Long tableId, String schemaName) {
+        final String finalSchemaName = (schemaName == null || schemaName.isBlank()) ? "public" : schemaName;
+        log.debug("Getting row count for table ID: {} from schema: {}", tableId, finalSchemaName);
 
-        BaseReferenceTable table = tableRepository.findById(tableId)
-                .orElseThrow(() -> new IllegalArgumentException("Table not found: " + tableId));
+        BaseReferenceTable table = getTableFromSchema(tableId, finalSchemaName);
+
+        // Quote schema and table name to handle mixed-case identifiers
+        String quotedSchema = "\"" + finalSchemaName.replace("\"", "\"\"") + "\"";
+        String quotedTable = "\"" + table.getTblLink().replace("\"", "\"\"") + "\"";
+        String schemaQualifiedTable = quotedSchema + "." + quotedTable;
 
         try (Connection conn = dataSource.getConnection();
                 PreparedStatement stmt = conn.prepareStatement(
-                        "SELECT COUNT(*) FROM \"" + table.getTblLink().replace("\"", "\"\"") + "\"")) {
+                        "SELECT COUNT(*) FROM " + schemaQualifiedTable)) {
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 return rs.getLong(1);
@@ -142,6 +158,18 @@ public class StreamingDataServiceImpl implements StreamingDataService {
             log.warn("Could not get row count for table {}", tableId, e);
             throw new RuntimeException("Failed to get row count: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Get table from the specified schema
+     */
+    private BaseReferenceTable getTableFromSchema(Long tableId, String schemaName) {
+        List<BaseReferenceTable> tables = schemaDao.getTablesFromSchema(schemaName);
+        return tables.stream()
+                .filter(t -> t.getId().equals(tableId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Table not found with ID: " + tableId + " in schema: " + schemaName));
     }
 }
 

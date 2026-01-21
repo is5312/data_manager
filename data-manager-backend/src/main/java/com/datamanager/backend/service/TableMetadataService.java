@@ -15,9 +15,10 @@ public interface TableMetadataService {
      * Create a new logical table with physical table
      * 
      * @param tableLabel Logical table name/label
+     * @param deploymentType Deployment type (RUN_TIME or DESIGN_TIME)
      * @return Created table metadata
      */
-    TableMetadataDto createTable(String tableLabel);
+    TableMetadataDto createTable(String tableLabel, String deploymentType);
 
     /**
      * Add a column to a logical table
@@ -50,25 +51,28 @@ public interface TableMetadataService {
     /**
      * Get all logical tables
      * 
+     * @param schemaName Optional schema name to filter by (defaults to "public" if null)
      * @return List of table metadata
      */
-    List<TableMetadataDto> getAllTables();
+    List<TableMetadataDto> getAllTables(String schemaName);
 
     /**
      * Get table by ID
      * 
      * @param tableId Table ID
+     * @param schemaName Optional schema name to search in (searches all schemas if null)
      * @return Table metadata
      */
-    TableMetadataDto getTableById(Long tableId);
+    TableMetadataDto getTableById(Long tableId, String schemaName);
 
     /**
      * Get all columns for a table
      * 
      * @param tableId Table ID
+     * @param schemaName Optional schema name to search in (searches all schemas if null)
      * @return List of column metadata
      */
-    List<ColumnMetadataDto> getColumnsByTableId(Long tableId);
+    List<ColumnMetadataDto> getColumnsByTableId(Long tableId, String schemaName);
 
     /**
      * Delete a logical table (and its physical table)

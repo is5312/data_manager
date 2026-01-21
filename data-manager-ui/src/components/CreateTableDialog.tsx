@@ -31,7 +31,7 @@ interface Column {
 interface CreateTableDialogProps {
     open: boolean;
     onClose: () => void;
-    onSubmit: (tableName: string, columns: Column[]) => void;
+    onSubmit: (tableName: string, columns: Column[], deploymentType: string) => void;
 }
 
 const DATA_TYPES = [
@@ -50,6 +50,7 @@ export const CreateTableDialog: React.FC<CreateTableDialogProps> = ({ open, onCl
     const [columns, setColumns] = useState<Column[]>([
         { id: '1', label: '', type: 'VARCHAR' }
     ]);
+    const [deploymentType, setDeploymentType] = useState<string>('DESIGN_TIME');
     const [error, setError] = useState<string | null>(null);
 
     const handleAddColumn = () => {
@@ -92,17 +93,19 @@ export const CreateTableDialog: React.FC<CreateTableDialogProps> = ({ open, onCl
             }
         }
 
-        onSubmit(tableName, validColumns);
+        onSubmit(tableName, validColumns, deploymentType);
 
         // Reset form
         setTableName('');
         setColumns([{ id: '1', label: '', type: 'VARCHAR' }]);
+        setDeploymentType('DESIGN_TIME');
         setError(null);
     };
 
     const handleClose = () => {
         setTableName('');
         setColumns([{ id: '1', label: '', type: 'VARCHAR' }]);
+        setDeploymentType('DESIGN_TIME');
         setError(null);
         onClose();
     };
@@ -157,6 +160,19 @@ export const CreateTableDialog: React.FC<CreateTableDialogProps> = ({ open, onCl
                     size="small"
                     sx={{ mb: 3 }}
                 />
+
+                {/* Deployment Type */}
+                <FormControl fullWidth size="small" sx={{ mb: 3 }}>
+                    <InputLabel>Deployment Type</InputLabel>
+                    <Select
+                        value={deploymentType}
+                        label="Deployment Type"
+                        onChange={(e) => setDeploymentType(e.target.value)}
+                    >
+                        <MenuItem value="DESIGN_TIME">DESIGN_TIME - Low volume tables where data is entered by a user via the UI</MenuItem>
+                        <MenuItem value="RUN_TIME">RUN_TIME - High volume read and write tables where a background process will insert and read data</MenuItem>
+                    </Select>
+                </FormControl>
 
                 <Divider sx={{ mb: 2 }}>
                     <Chip label="COLUMNS" size="small" sx={{ borderRadius: 0, fontWeight: 600 }} />

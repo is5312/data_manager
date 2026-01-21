@@ -39,4 +39,14 @@ public interface BaseReferenceTableRepository extends JpaRepository<BaseReferenc
      */
     @Query("SELECT DISTINCT t FROM BaseReferenceTable t LEFT JOIN FETCH t.columns")
     java.util.List<BaseReferenceTable> findAllWithColumns();
+
+    /**
+     * Find all tables ordered by most recently updated or created
+     * Orders by updatedAt DESC (nulls last), then by createdAt DESC
+     * Uses CASE to handle null updTs values
+     */
+    @Query("SELECT t FROM BaseReferenceTable t ORDER BY " +
+           "CASE WHEN t.updTs IS NOT NULL THEN t.updTs ELSE t.addTs END DESC, " +
+           "t.addTs DESC")
+    java.util.List<BaseReferenceTable> findAllOrderByMostRecent();
 }

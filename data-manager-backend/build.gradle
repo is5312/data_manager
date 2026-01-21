@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot'
     id 'io.spring.dependency-management'
+    id 'com.google.protobuf' version '0.9.4'
 }
 
 java {
@@ -44,12 +45,34 @@ dependencies {
     implementation 'org.apache.arrow:arrow-memory-netty'
     implementation 'org.apache.arrow:arrow-jdbc'
     
+    // JobRunr for async job processing
+    implementation 'org.jobrunr:jobrunr-spring-boot-3-starter:8.4.0'
+    
+    // gRPC and Protobuf
+    implementation 'net.devh:grpc-server-spring-boot-starter:3.1.0.RELEASE'
+    implementation 'io.grpc:grpc-protobuf:1.60.0'
+    implementation 'io.grpc:grpc-stub:1.60.0'
+    implementation 'com.google.protobuf:protobuf-java:3.25.1'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+    
     // Lombok for reducing boilerplate
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    
+    // gRPC testing
+    testImplementation 'io.grpc:grpc-testing:1.60.0'
+    testImplementation 'io.grpc:grpc-inprocess:1.60.0'
+    
+    // Embedded PostgreSQL for integration tests (no Docker required)
+    testImplementation 'io.zonky.test:embedded-postgres:2.0.3'
+    testImplementation 'io.zonky.test:embedded-database-spring-test:2.5.0'
+    
+    // AssertJ for fluent assertions
+    testImplementation 'org.assertj:assertj-core'
 }
 
 tasks.named('bootRun') {
@@ -60,4 +83,34 @@ tasks.named('bootRun') {
         '-Darrow.memory.debug.allocator=false', 
         '-Darrow.enable_unsafe_memory_access=true'
     ]
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Protobuf configuration
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.25.1'
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.60.0'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
 }

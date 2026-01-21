@@ -4,6 +4,7 @@ export interface TableMetadata {
     physicalName: string;
     description?: string;
     versionNo?: number;
+    deploymentType?: string;
     createdAt?: string;
     createdBy?: string;
     updatedAt?: string;
@@ -42,6 +43,48 @@ export interface BatchStatus {
     writeCount?: number;
     skipCount?: number;
     failureExceptions?: string[];
+}
+
+export interface MigrationResponse {
+    status: string;
+    message: string;
+    shadowTableName?: string;
+    targetSchema?: string;
+    tableId?: number;
+    details?: string;
+}
+
+export interface MigrationJobResponse {
+    jobId: string;
+    status: string;
+    tableId: number;
+    sourceSchema: string;
+    targetSchema: string;
+    message: string;
+}
+
+export interface JobDetails {
+    jobId: string;
+    status: 'ENQUEUED' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED';
+    jobName: string;
+    createdAt: string;
+    updatedAt: string;
+    result?: MigrationResponse;
+    failureReason?: string;
+}
+
+export interface JobsListResponse {
+    content: JobDetails[];
+    totalElements: number;
+    totalPages: number;
+    number: number;
+    size: number;
+}
+
+export interface ActiveMigrationDto {
+    hasActiveMigration: boolean;
+    jobId?: string;
+    status?: string;
 }
 
 const API_BASE_URL = '/api/schema';
@@ -104,33 +147,42 @@ async function fetchWrapper<T>(
 }
 
 // Table Metadata Operations
-export const fetchTables = async (): Promise<TableMetadata[]> => {
+export const fetchTables = async (schema?: string): Promise<TableMetadata[]> => {
+    const url = schema 
+        ? `${API_BASE_URL}/tables?schema=${encodeURIComponent(schema)}`
+        : `${API_BASE_URL}/tables`;
     return fetchWrapper<TableMetadata[]>(
-        `${API_BASE_URL}/tables`,
+        url,
         undefined,
         'Failed to fetch tables'
     );
 };
 
-export const fetchTableById = async (id: number): Promise<TableMetadata> => {
+export const fetchTableById = async (id: number, schema?: string): Promise<TableMetadata> => {
+    const url = schema 
+        ? `${API_BASE_URL}/tables/${id}?schema=${encodeURIComponent(schema)}`
+        : `${API_BASE_URL}/tables/${id}`;
     return fetchWrapper<TableMetadata>(
-        `${API_BASE_URL}/tables/${id}`,
+        url,
         undefined,
         'Failed to fetch table details'
     );
 };
 
-export const fetchTableColumns = async (tableId: number): Promise<ColumnMetadata[]> => {
+export const fetchTableColumns = async (tableId: number, schema?: string): Promise<ColumnMetadata[]> => {
+    const url = schema
+        ? `${API_BASE_URL}/tables/${tableId}/columns?schema=${encodeURIComponent(schema)}`
+        : `${API_BASE_URL}/tables/${tableId}/columns`;
     return fetchWrapper<ColumnMetadata[]>(
-        `${API_BASE_URL}/tables/${tableId}/columns`,
+        url,
         undefined,
         'Failed to fetch table columns'
     );
 };
 
-export const createTable = async (label: string): Promise<TableMetadata> => {
+export const createTable = async (label: string, deploymentType: string = 'DESIGN_TIME'): Promise<TableMetadata> => {
     return fetchWrapper<TableMetadata>(
-        `${API_BASE_URL}/tables?label=${encodeURIComponent(label)}`,
+        `${API_BASE_URL}/tables?label=${encodeURIComponent(label)}&deploymentType=${encodeURIComponent(deploymentType)}`,
         { method: 'POST' },
         'Failed to create table'
     );
@@ -177,6 +229,7 @@ export const uploadCsvTableWithTypes = async (
 export const startBatchUpload = async (
     file: File,
     tableName: string,
+    deploymentType: string = 'RUN_TIME',
     columnTypes?: string[],
     selectedColumnIndices?: number[],
     csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }
@@ -184,6 +237,7 @@ export const startBatchUpload = async (
     const formData = new FormData();
     formData.append('file', file);
     formData.append('tableName', tableName);
+    formData.append('deploymentType', deploymentType);
     if (columnTypes && columnTypes.length > 0) {
         formData.append('columnTypes', JSON.stringify(columnTypes));
     }
@@ -256,5 +310,54 @@ export const deleteTableRow = async (tableId: number, rowId: number): Promise<vo
         `/api/data/tables/${tableId}/rows/${rowId}`,
         { method: 'DELETE' },
         'Failed to delete row'
+    );
+};
+
+// Migration Operations
+export const fetchAvailableSchemas = async (): Promise<string[]> => {
+    return fetchWrapper<string[]>(
+        `${API_BASE_URL}/migration/schemas`,
+        undefined,
+        'Failed to fetch available schemas'
+    );
+};
+
+export const migrateTable = async (tableId: number, sourceSchema: string, targetSchema: string): Promise<MigrationJobResponse> => {
+    return fetchWrapper<MigrationJobResponse>(
+        `${API_BASE_URL}/migration/tables/${tableId}/migrate?sourceSchema=${encodeURIComponent(sourceSchema)}&targetSchema=${encodeURIComponent(targetSchema)}`,
+        { method: 'POST' },
+        'Failed to migrate table'
+    );
+};
+
+export const fetchJobStatus = async (jobId: string): Promise<JobDetails> => {
+    return fetchWrapper<JobDetails>(
+        `${API_BASE_URL}/migration/jobs/${jobId}`,
+        undefined,
+        'Failed to fetch job status'
+    );
+};
+
+export const fetchJobs = async (page = 0, size = 20, status?: string): Promise<JobsListResponse> => {
+    const params = new URLSearchParams({
+        page: page.toString(),
+        size: size.toString(),
+    });
+    if (status) {
+        params.append('status', status);
+    }
+    
+    return fetchWrapper<JobsListResponse>(
+        `${API_BASE_URL}/migration/jobs?${params.toString()}`,
+        undefined,
+        'Failed to fetch jobs list'
+    );
+};
+
+export const checkActiveMigration = async (tableId: number, targetSchema: string): Promise<ActiveMigrationDto> => {
+    return fetchWrapper<ActiveMigrationDto>(
+        `${API_BASE_URL}/migration/tables/${tableId}/active?targetSchema=${encodeURIComponent(targetSchema)}`,
+        undefined,
+        'Failed to check for active migration'
     );
 };

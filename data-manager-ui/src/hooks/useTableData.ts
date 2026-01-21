@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     fetchTableById,
     fetchTableColumns,
@@ -30,6 +31,8 @@ interface UseTableDataResult {
  * Custom hook to manage table metadata and data loading
  */
 export function useTableData(tableId: string | undefined): UseTableDataResult {
+    const [searchParams] = useSearchParams();
+    const currentSchema = searchParams.get('schema') || 'public';
     const [tableInfo, setTableInfo] = useState<TableMetadata | null>(null);
     const [columns, setColumns] = useState<ColumnMetadata[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,8 +50,8 @@ export function useTableData(tableId: string | undefined): UseTableDataResult {
         try {
             setLoading(true);
             const [table, cols] = await Promise.all([
-                fetchTableById(Number(tableId)),
-                fetchTableColumns(Number(tableId))
+                fetchTableById(Number(tableId), currentSchema),
+                fetchTableColumns(Number(tableId), currentSchema)
             ]);
 
             setTableInfo(table);
@@ -132,7 +135,8 @@ export function useTableData(tableId: string | undefined): UseTableDataResult {
                         // Ensure dataLoaded is set even for empty tables
                         setDataLoaded(true);
                     }
-                }
+                },
+                currentSchema
             );
 
             // Final row count update
@@ -151,7 +155,7 @@ export function useTableData(tableId: string | undefined): UseTableDataResult {
             setLoadProgress('');
             setLoadProgressPercent(0);
         }
-    }, [tableId, tableInfo]);
+    }, [tableId, tableInfo, currentSchema]);
 
     // Load metadata on mount
     useEffect(() => {

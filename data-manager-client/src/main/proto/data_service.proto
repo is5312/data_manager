@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.datamanager.grpc";
+option java_outer_classname = "DataServiceProto";
+
+package datamanager;
+
+// Service for data operations on tables
+service DataOperationsService {
+  // Insert a new row into a table
+  rpc InsertRow(InsertRowRequest) returns (InsertRowResponse);
+  
+  // Update an existing row in a table
+  rpc UpdateRow(UpdateRowRequest) returns (UpdateRowResponse);
+  
+  // Delete a row from a table
+  rpc DeleteRow(DeleteRowRequest) returns (DeleteRowResponse);
+}
+
+// Request to insert a row
+message InsertRowRequest {
+  int64 table_id = 1;                    // Logical table ID
+  string schema_name = 2;                 // Schema name (defaults to "public" if empty)
+  map<string, string> row_data = 3;      // Column name -> value mapping
+}
+
+// Response after inserting a row
+message InsertRowResponse {
+  int64 id = 1;                          // ID of inserted row
+  string message = 2;                     // Success message
+  AuditInfo audit = 3;                    // Audit trail information
+}
+
+// Request to update a row
+message UpdateRowRequest {
+  int64 table_id = 1;                    // Logical table ID
+  int64 row_id = 2;                      // ID of row to update
+  string schema_name = 3;                 // Schema name (defaults to "public" if empty)
+  map<string, string> row_data = 4;      // Column name -> value mapping
+}
+
+// Response after updating a row
+message UpdateRowResponse {
+  string message = 1;                     // Success message
+  AuditInfo audit = 2;                    // Audit trail information
+}
+
+// Request to delete a row
+message DeleteRowRequest {
+  int64 table_id = 1;                    // Logical table ID
+  int64 row_id = 2;                      // ID of row to delete
+  string schema_name = 3;                 // Schema name (defaults to "public" if empty)
+}
+
+// Response after deleting a row
+message DeleteRowResponse {
+  string message = 1;                     // Success message
+}
+
+// Audit information for tracking changes
+message AuditInfo {
+  string add_usr = 1;                    // User who added the row
+  string add_ts = 2;                     // Timestamp when row was added
+  string upd_usr = 3;                    // User who last updated the row
+  string upd_ts = 4;                     // Timestamp when row was last updated
+}

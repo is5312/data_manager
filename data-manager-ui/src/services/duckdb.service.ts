@@ -106,7 +106,8 @@ type ProgressCallback = (
 export async function loadTableDataIntoDuckDBArrow(
     tableId: number,
     tableName: string,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    schema?: string
 ): Promise<{ rowCount: number; columnCount: number }> {
     // Prevent concurrent loads of the same table
     if (loadingTables.has(tableName)) {
@@ -135,7 +136,7 @@ export async function loadTableDataIntoDuckDBArrow(
         }
 
         // Download and insert Arrow stream progressively
-        const stats = await downloadAndInsertArrowStream(tableId, tableName, conn, onProgress);
+        const stats = await downloadAndInsertArrowStream(tableId, tableName, conn, onProgress, schema);
 
         console.timeEnd(`⏱️ Load table ${tableName} (Arrow streaming)`);
         console.log(`✅ Loaded ${stats.rowCount.toLocaleString()} rows, ${stats.columnCount} columns`);
@@ -162,9 +163,13 @@ async function downloadAndInsertArrowStream(
     tableId: number,
     tableName: string,
     conn: duckdb.AsyncDuckDBConnection,
-    onProgress?: ProgressCallback
+    onProgress?: ProgressCallback,
+    schema?: string
 ): Promise<{ rowCount: number; columnCount: number }> {
-    const response = await fetch(`/api/data/tables/${tableId}/rows/arrow`);
+    const url = schema 
+        ? `/api/data/tables/${tableId}/rows/arrow?schema=${encodeURIComponent(schema)}`
+        : `/api/data/tables/${tableId}/rows/arrow`;
+    const response = await fetch(url);
 
     if (!response.ok) {
         throw new Error(`Failed to fetch Arrow data: ${response.statusText}`);

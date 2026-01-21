@@ -22,6 +22,7 @@ public class TableMetadataDto {
     private String physicalName;
     private String description;
     private Integer versionNo;
+    private String deploymentType;
     private LocalDateTime createdAt;
     private String createdBy;
     private LocalDateTime updatedAt;

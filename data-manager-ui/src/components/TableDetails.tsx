@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { AgGridReact } from 'ag-grid-react';
 import {
     ModuleRegistry,
@@ -32,6 +32,8 @@ ModuleRegistry.registerModules([ClientSideRowModelModule, PaginationModule]);
 export const TableDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const currentSchema = searchParams.get('schema') || 'public';
     const [columns, setColumns] = useState<ColumnMetadata[]>([]);
     const [tableInfo, setTableInfo] = useState<TableMetadata | null>(null);
     const [loading, setLoading] = useState(true);
@@ -46,8 +48,8 @@ export const TableDetails: React.FC = () => {
 
                 // Fetch table info and columns in parallel
                 const [table, cols] = await Promise.all([
-                    fetchTableById(Number(id)),
-                    fetchTableColumns(Number(id))
+                    fetchTableById(Number(id), currentSchema),
+                    fetchTableColumns(Number(id), currentSchema)
                 ]);
 
                 setTableInfo(table);
@@ -61,7 +63,7 @@ export const TableDetails: React.FC = () => {
         };
 
         loadTableDetails();
-    }, [id]);
+    }, [id, currentSchema]);
 
     const colDefs = useMemo<ColDef<ColumnMetadata>[]>(() => [
         {

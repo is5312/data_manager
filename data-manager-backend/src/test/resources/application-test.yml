@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: data-manager-backend-test
+  
+  datasource:
+    # Embedded PostgreSQL will be auto-configured via @AutoConfigureEmbeddedDatabase
+    # No fallback URL - tests must use embedded database only
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+      idle-timeout: 300000
+      max-lifetime: 600000
+      initialization-fail-timeout: -1
+  
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+    show-sql: false
+    open-in-view: false
+  
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: public
+    validate-on-migrate: true
+  
+  sql:
+    init:
+      mode: never
+  
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
+
+jooq:
+  sql-dialect: POSTGRES
+
+# Migration Configuration
+migration:
+  default-schema: public
+  available-schemas:
+    - public
+    - dmgr
+
+logging:
+  level:
+    com.datamanager.backend: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.jooq: WARN
+
+# Disable gRPC server for tests
+grpc:
+  server:
+    port: -1
+  # Alternative: use in-process name for tests or disable completely
+  # server:
+  #   in-process-name: test  # Use in-process server for tests
+  client:
+    GLOBAL:
+      negotiation-type: PLAINTEXT
+
+# Disable JobRunr for tests
+jobrunr:
+  background-job-server:
+    enabled: false
+  dashboard:
+    enabled: false

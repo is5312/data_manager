@@ -171,7 +171,10 @@ export function useTableMutations(): UseTableMutationsResult {
 
             // Refresh grid view (without purging cache if possible to keep DuckDB data)
             if (gridApi) {
-                gridApi.clearFocusedCell();
+                // Clear focused cell if method exists (AG Grid API may vary by version)
+                if (gridApi.clearFocusedCell) {
+                    gridApi.clearFocusedCell();
+                }
                 // Important: purge: false tells AG Grid to keep existing data and just refresh rows
                 // Since we already updated DuckDB, it should pull from there
                 gridApi.refreshServerSide({ purge: false });
@@ -307,7 +310,10 @@ export function useTableMutations(): UseTableMutationsResult {
 
             // Refresh grid to show changes (force purge to get fresh data from DuckDB)
             if (gridApi) {
-                gridApi.clearFocusedCell();
+                // Clear focused cell if method exists (AG Grid API may vary by version)
+                if (gridApi.clearFocusedCell) {
+                    gridApi.clearFocusedCell();
+                }
                 gridApi.refreshServerSide({ purge: true });
             }
 

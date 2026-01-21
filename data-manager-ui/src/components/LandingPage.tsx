@@ -23,7 +23,8 @@ import {
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions
+    DialogActions,
+    Chip
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -32,13 +33,19 @@ import {
     Edit as EditIcon,
     CloudUpload as UploadIcon,
     Delete as DeleteIcon,
-    Info as InfoIcon
+    Info as InfoIcon,
+    SwapHoriz as MigrateIcon,
+    QueryBuilder as QueryBuilderIcon
 } from '@mui/icons-material';
-import { fetchTables, createTable, addColumn, deleteTable, TableMetadata, startBatchUpload } from '../services/api';
+import { fetchTables, createTable, addColumn, deleteTable, TableMetadata, startBatchUpload, fetchAvailableSchemas } from '../services/api';
 import { initDuckDB } from '../utils/duckdb';
 import { CreateTableDialog } from './CreateTableDialog';
 import { CsvUploadDialog } from './CsvUploadDialog';
 import { BatchUploadProgressDialog } from './BatchUploadProgressDialog';
+import { SchemaSelector } from './SchemaSelector';
+import { TableMigrationDialog } from './TableMigrationDialog';
+import { MigrationStatusDialog } from './MigrationStatusDialog';
+import { NavigationBar } from './NavigationBar';
 import './LandingPage.css';
 
 // Register all AG Grid Enterprise modules
@@ -63,10 +70,20 @@ export const LandingPage: React.FC = () => {
         message: '',
         severity: 'success'
     });
+    const [currentSchema, setCurrentSchema] = useState<string>('public');
+    const [availableSchemas, setAvailableSchemas] = useState<string[]>(['public']);
+    const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
+    const [tableToMigrate, setTableToMigrate] = useState<TableMetadata | null>(null);
+    // Map of tableId -> jobId to track migration jobs
+    const [tableMigrationJobs, setTableMigrationJobs] = useState<Map<number, string>>(new Map());
+    const [migrationStatusDialogOpen, setMigrationStatusDialogOpen] = useState(false);
+    const [selectedJobId, setSelectedJobId] = useState<string>('');
+    const [selectedTableLabel, setSelectedTableLabel] = useState<string>('');
 
     const loadData = useCallback(() => {
         setLoading(true);
-        fetchTables().then(data => {
+        fetchTables(currentSchema).then(data => {
+            // Data is already sorted by the backend (most recently updated/created first)
             setRowData(data);
             setLoading(false);
         }).catch(err => {
@@ -74,7 +91,18 @@ export const LandingPage: React.FC = () => {
             setError("Failed to fetch tables from the server");
             setLoading(false);
         });
-    }, []);
+    }, [currentSchema]);
+
+    const loadAvailableSchemas = useCallback(() => {
+        fetchAvailableSchemas().then(schemas => {
+            setAvailableSchemas(schemas);
+            if (!schemas.includes(currentSchema)) {
+                setCurrentSchema('public');
+            }
+        }).catch(err => {
+            console.error("Error fetching available schemas", err);
+        });
+    }, [currentSchema]);
 
     useEffect(() => {
         initDuckDB().then(() => {
@@ -85,14 +113,15 @@ export const LandingPage: React.FC = () => {
             setError("Failed to initialize DuckDB WASM");
         });
 
+        loadAvailableSchemas();
         loadData();
-    }, [loadData]);
+    }, [loadData, loadAvailableSchemas]);
 
 
-    const handleCreateTable = async (tableName: string, columns: Array<{ id: string; label: string; type: string }>) => {
+    const handleCreateTable = async (tableName: string, columns: Array<{ id: string; label: string; type: string }>, deploymentType: string) => {
         try {
             // First create the table
-            const newTable = await createTable(tableName);
+            const newTable = await createTable(tableName, deploymentType);
 
             // Then add each column
             for (const column of columns) {
@@ -107,10 +136,10 @@ export const LandingPage: React.FC = () => {
         }
     };
 
-    const handleCsvUpload = async (file: File, tableName: string, columnTypes?: string[], selectedColumnIndices?: number[], csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }) => {
+    const handleCsvUpload = async (file: File, tableName: string, deploymentType: string, columnTypes?: string[], selectedColumnIndices?: number[], csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }) => {
         try {
             // Always use batch upload (CSV or GZIP). Backend will stream-read and insert asynchronously.
-            const resp = await startBatchUpload(file, tableName, columnTypes, selectedColumnIndices, csvOptions);
+            const resp = await startBatchUpload(file, tableName, deploymentType, columnTypes, selectedColumnIndices, csvOptions);
 
             // Store the mapping of tableId -> batchId
             const tableId = resp.table.id;
@@ -130,8 +159,8 @@ export const LandingPage: React.FC = () => {
     };
 
     const handleViewTable = useCallback((table: TableMetadata) => {
-        navigate(`/tables/${table.id}`);
-    }, [navigate]);
+        navigate(`/tables/${table.id}?schema=${encodeURIComponent(currentSchema)}`);
+    }, [navigate, currentSchema]);
 
     const handleRequestDelete = (table: TableMetadata) => {
         setTableToDelete(table);
@@ -157,11 +186,13 @@ export const LandingPage: React.FC = () => {
         const tableId = params.data.id;
         const batchIdForTable = tableBatchMap.get(tableId);
         const hasBatch = batchIdForTable !== undefined;
+        const migrationJobId = tableMigrationJobs.get(tableId);
+        const hasMigrationJob = migrationJobId !== undefined;
 
         const handleEdit = (e: React.MouseEvent) => {
             e.stopPropagation();
             if (params.data) {
-                navigate(`/tables/${params.data.id}/edit`);
+                navigate(`/tables/${params.data.id}/edit?schema=${encodeURIComponent(currentSchema)}`);
             }
         };
 
@@ -173,6 +204,15 @@ export const LandingPage: React.FC = () => {
             }
         };
 
+        const handleViewMigrationStatus = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (migrationJobId && params.data) {
+                setSelectedJobId(migrationJobId);
+                setSelectedTableLabel(params.data.label);
+                setMigrationStatusDialogOpen(true);
+            }
+        };
+
         return (
             <Stack direction="row" spacing={0.5} alignItems="center">
                 <Tooltip title="View Data" placement="top">
@@ -180,7 +220,7 @@ export const LandingPage: React.FC = () => {
                         size="small"
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (params.data) handleViewTable(params.data);
+                            if (params.data) navigate(`/tables/${params.data.id}?schema=${encodeURIComponent(currentSchema)}`);
                         }}
                         sx={{
                             color: 'primary.main',
@@ -215,6 +255,37 @@ export const LandingPage: React.FC = () => {
                         <InfoIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
+                <Tooltip title="Migrate Table" placement="top">
+                    <IconButton
+                        size="small"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (params.data) {
+                                setTableToMigrate(params.data);
+                                setMigrationDialogOpen(true);
+                            }
+                        }}
+                        sx={{
+                            color: 'warning.main',
+                            '&:hover': { backgroundColor: 'rgba(237, 108, 2, 0.1)' }
+                        }}
+                    >
+                        <MigrateIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title={hasMigrationJob ? "View Migration Status" : "No recent migration"} placement="top">
+                    <IconButton
+                        size="small"
+                        onClick={handleViewMigrationStatus}
+                        sx={{
+                            color: hasMigrationJob ? 'success.main' : 'action.disabled',
+                            '&:hover': hasMigrationJob ? { backgroundColor: 'rgba(46, 125, 50, 0.1)' } : {}
+                        }}
+                        disabled={!hasMigrationJob}
+                    >
+                        <QueryBuilderIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
                 <Tooltip title="Delete Table" placement="top">
                     <IconButton
                         size="small"
@@ -232,7 +303,7 @@ export const LandingPage: React.FC = () => {
                 </Tooltip>
             </Stack>
         );
-    }, [handleViewTable, navigate, tableBatchMap, setProgressOpen, setActiveBatchId]);
+    }, [handleViewTable, navigate, currentSchema, tableBatchMap, tableMigrationJobs, setProgressOpen, setActiveBatchId]);
 
     const colDefs = useMemo<ColDef<TableMetadata>[]>(() => [
         {
@@ -275,6 +346,35 @@ export const LandingPage: React.FC = () => {
             sortable: true,
             filter: true,
             cellStyle: () => ({ color: '#666666', fontSize: '0.8rem' })
+        },
+        {
+            field: 'deploymentType',
+            headerName: 'DEPLOYMENT TYPE',
+            width: 160,
+            sortable: true,
+            filter: true,
+            cellRenderer: (params: ICellRendererParams<TableMetadata>) => {
+                if (!params.value) return '';
+                const isRunTime = params.value === 'RUN_TIME';
+                return (
+                    <Chip
+                        label={params.value}
+                        size="small"
+                        sx={{
+                            height: 20,
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            backgroundColor: isRunTime ? '#E3F2FD' : '#F3E5F5',
+                            color: isRunTime ? '#1976D2' : '#7B1FA2',
+                            border: `1px solid ${isRunTime ? '#90CAF9' : '#CE93D8'}`,
+                            '& .MuiChip-label': {
+                                padding: '0 8px'
+                            }
+                        }}
+                    />
+                );
+            },
+            cellStyle: () => ({ display: 'flex', alignItems: 'center', justifyContent: 'center' })
         },
         {
             field: 'versionNo',
@@ -327,8 +427,9 @@ export const LandingPage: React.FC = () => {
     ], [ViewActionRenderer]);
 
     return (
-        <Box sx={{ minHeight: '100vh', background: '#FFFFFF', pt: 1.5 }}>
-            <Container maxWidth="xl">
+        <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
+            <NavigationBar isDuckDBReady={duckDBReady} />
+            <Container maxWidth="xl" sx={{ pt: 1.5 }}>
                 {/* Header */}
                 <Box sx={{
                     borderBottom: '1px solid #E0E0E0',
@@ -339,22 +440,29 @@ export const LandingPage: React.FC = () => {
                     alignItems: 'center'
                 }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
-                        <Box>
-                            <Typography variant="h6" sx={{ color: 'text.primary', letterSpacing: '0.1em', fontSize: '0.875rem' }}>
-                                DATA MANAGER
-                            </Typography>
-                        </Box>
-                        <Box
-                            sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: duckDBReady ? '#2E7D32' : '#ED6C02',
-                                boxShadow: duckDBReady ? '0 0 8px rgba(46, 125, 50, 0.6)' : '0 0 8px rgba(237, 108, 2, 0.6)'
-                            }}
-                        />
+                        <Box />
                     </Stack>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <SchemaSelector
+                            selectedSchema={currentSchema}
+                            availableSchemas={availableSchemas}
+                            onSchemaChange={(schema) => {
+                                setCurrentSchema(schema);
+                            }}
+                        />
+                        <Tooltip title="Migrate Table">
+                            <IconButton
+                                onClick={() => {
+                                    setTableToMigrate(null);
+                                    setMigrationDialogOpen(true);
+                                }}
+                                size="small"
+                                color="warning"
+                                sx={{ borderRadius: 1, border: '1px solid', borderColor: 'warning.light' }}
+                            >
+                                <MigrateIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                         <Tooltip title="Create New Table">
                             <IconButton
                                 onClick={() => setCreateDialogOpen(true)}
@@ -423,6 +531,16 @@ export const LandingPage: React.FC = () => {
                                 autoHeaderHeight: true,
                                 cellStyle: { display: 'flex', alignItems: 'center' }
                             }}
+                            onGridReady={(params) => {
+                                // Set initial sort to show most recently updated/created first
+                                params.api.applyColumnState({
+                                    state: [
+                                        { colId: 'updatedAt', sort: 'desc' },
+                                        { colId: 'createdAt', sort: 'desc' }
+                                    ],
+                                    defaultState: { sort: null }
+                                });
+                            }}
                         />
                     )}
                 </Paper>
@@ -442,6 +560,39 @@ export const LandingPage: React.FC = () => {
                 open={progressOpen}
                 batchId={activeBatchId}
                 onClose={() => setProgressOpen(false)}
+            />
+            <TableMigrationDialog
+                open={migrationDialogOpen}
+                onClose={() => {
+                    setMigrationDialogOpen(false);
+                    setTableToMigrate(null);
+                }}
+                onSuccess={(jobId: string) => {
+                    // Store the job ID for this table
+                    if (tableToMigrate) {
+                        setTableMigrationJobs(prev => {
+                            const newMap = new Map(prev);
+                            newMap.set(tableToMigrate.id, jobId);
+                            return newMap;
+                        });
+                    }
+                    loadData();
+                    setSnackbar({
+                        open: true,
+                        message: `Migration job queued successfully. Job ID: ${jobId.substring(0, 8)}...`,
+                        severity: 'success'
+                    });
+                }}
+                table={tableToMigrate || undefined}
+                sourceSchema={currentSchema}
+                availableTables={rowData}
+            />
+
+            <MigrationStatusDialog
+                open={migrationStatusDialogOpen}
+                onClose={() => setMigrationStatusDialogOpen(false)}
+                jobId={selectedJobId}
+                tableLabel={selectedTableLabel}
             />
 
             <Dialog

@@ -31,7 +31,7 @@ import { CloudUpload as UploadIcon, Warning as WarningIcon, ExpandMore as Expand
 interface CsvUploadDialogProps {
     open: boolean;
     onClose: () => void;
-    onUpload: (file: File, tableName: string, columnTypes?: string[], selectedColumnIndices?: number[], csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }) => Promise<void>;
+    onUpload: (file: File, tableName: string, deploymentType: string, columnTypes?: string[], selectedColumnIndices?: number[], csvOptions?: { delimiter?: string; quoteChar?: string; escapeChar?: string }) => Promise<void>;
 }
 
 type ColumnPreview = {
@@ -42,6 +42,7 @@ type ColumnPreview = {
 export const CsvUploadDialog: React.FC<CsvUploadDialogProps> = ({ open, onClose, onUpload }) => {
     const [tableName, setTableName] = useState('');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [deploymentType, setDeploymentType] = useState<string>('RUN_TIME');
     const [error, setError] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [columns, setColumns] = useState<ColumnPreview[]>([]);
@@ -314,7 +315,7 @@ export const CsvUploadDialog: React.FC<CsvUploadDialogProps> = ({ open, onClose,
             escapeChar
         };
 
-        onUpload(selectedFile, tableName.trim(), undefined, columnIndices, opts)
+        onUpload(selectedFile, tableName.trim(), deploymentType, undefined, columnIndices, opts)
             .then(() => {
                 console.timeEnd('⏱️ Upload API call');
                 console.log('✅ Upload initiated successfully');
@@ -369,6 +370,7 @@ export const CsvUploadDialog: React.FC<CsvUploadDialogProps> = ({ open, onClose,
     const handleClose = () => {
         setTableName('');
         setSelectedFile(null);
+        setDeploymentType('RUN_TIME');
         setError(null);
         setUploading(false);
         setColumns([]);
@@ -414,6 +416,18 @@ export const CsvUploadDialog: React.FC<CsvUploadDialogProps> = ({ open, onClose,
                     size="small"
                     required
                 />
+
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                    <InputLabel>Deployment Type</InputLabel>
+                    <Select
+                        value={deploymentType}
+                        label="Deployment Type"
+                        onChange={(e) => setDeploymentType(e.target.value)}
+                    >
+                        <MenuItem value="RUN_TIME">RUN_TIME - High volume read and write tables where a background process will insert and read data</MenuItem>
+                        <MenuItem value="DESIGN_TIME">DESIGN_TIME - Low volume tables where data is entered by a user via the UI</MenuItem>
+                    </Select>
+                </FormControl>
 
                 <Accordion expanded={showAdvanced} onChange={() => setShowAdvanced(!showAdvanced)} sx={{ mb: 2, border: '1px solid #E0E0E0', boxShadow: 'none' }}>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>

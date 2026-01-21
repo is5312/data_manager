@@ -33,10 +33,12 @@ public class DataController {
      * This is much faster than fetching rows individually for large datasets
      */
     @GetMapping(value = "/tables/{tableId}/rows/stream", produces = "text/csv")
-    public ResponseEntity<StreamingResponseBody> streamTableDataAsCsv(@PathVariable Long tableId) {
-        log.info("GET /api/data/tables/{}/rows/stream - Streaming table data as CSV", tableId);
+    public ResponseEntity<StreamingResponseBody> streamTableDataAsCsv(
+            @PathVariable Long tableId,
+            @RequestParam(required = false, defaultValue = "public") String schema) {
+        log.info("GET /api/data/tables/{}/rows/stream - Streaming table data as CSV from schema: {}", tableId, schema);
 
-        StreamingResponseBody stream = streamingDataService.streamTableDataAsCsv(tableId);
+        StreamingResponseBody stream = streamingDataService.streamTableDataAsCsv(tableId, schema);
 
         // Use tableId for filename (service handles table lookup and validation)
         String filename = "table_" + tableId + ".csv";
@@ -53,18 +55,20 @@ public class DataController {
      * Frontend can load Arrow directly into DuckDB for instant querying
      */
     @GetMapping(value = "/tables/{tableId}/rows/arrow", produces = "application/vnd.apache.arrow.stream")
-    public ResponseEntity<StreamingResponseBody> streamTableDataAsArrow(@PathVariable Long tableId) {
-        log.info("GET /api/data/tables/{}/rows/arrow - Streaming table data as Arrow IPC", tableId);
+    public ResponseEntity<StreamingResponseBody> streamTableDataAsArrow(
+            @PathVariable Long tableId,
+            @RequestParam(required = false, defaultValue = "public") String schema) {
+        log.info("GET /api/data/tables/{}/rows/arrow - Streaming table data as Arrow IPC from schema: {}", tableId, schema);
 
         // Get total row count for progress tracking (service handles validation)
         long totalRows = 0;
         try {
-            totalRows = streamingDataService.getTableRowCount(tableId);
+            totalRows = streamingDataService.getTableRowCount(tableId, schema);
         } catch (Exception e) {
             log.warn("Could not get row count, progress will not be available", e);
         }
 
-        StreamingResponseBody stream = streamingDataService.streamTableDataAsArrow(tableId);
+        StreamingResponseBody stream = streamingDataService.streamTableDataAsArrow(tableId, schema);
 
         String filename = "table_" + tableId + ".arrow";
 

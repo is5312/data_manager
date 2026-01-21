@@ -29,9 +29,10 @@ public class TableController {
      * Get all tables
      */
     @GetMapping
-    public ResponseEntity<List<TableMetadataDto>> getAllTables() {
-        log.info("GET /api/schema/tables - Fetching all tables");
-        List<TableMetadataDto> tables = tableMetadataService.getAllTables();
+    public ResponseEntity<List<TableMetadataDto>> getAllTables(
+            @RequestParam(required = false, defaultValue = "public") String schema) {
+        log.info("GET /api/schema/tables - Fetching all tables from schema: {}", schema);
+        List<TableMetadataDto> tables = tableMetadataService.getAllTables(schema);
         return ResponseEntity.ok(tables);
     }
 
@@ -39,9 +40,11 @@ public class TableController {
      * Get table by ID
      */
     @GetMapping("/{tableId}")
-    public ResponseEntity<TableMetadataDto> getTableById(@PathVariable Long tableId) {
-        log.info("GET /api/schema/tables/{} - Fetching table", tableId);
-        TableMetadataDto table = tableMetadataService.getTableById(tableId);
+    public ResponseEntity<TableMetadataDto> getTableById(
+            @PathVariable Long tableId,
+            @RequestParam(required = false) String schema) {
+        log.info("GET /api/schema/tables/{} - Fetching table from schema: {}", tableId, schema);
+        TableMetadataDto table = tableMetadataService.getTableById(tableId, schema);
         return ResponseEntity.ok(table);
     }
 
@@ -49,9 +52,11 @@ public class TableController {
      * Create a new table
      */
     @PostMapping
-    public ResponseEntity<TableMetadataDto> createTable(@RequestParam String label) {
-        log.info("POST /api/schema/tables - Creating table with label: {}", label);
-        TableMetadataDto created = tableMetadataService.createTable(label);
+    public ResponseEntity<TableMetadataDto> createTable(
+            @RequestParam String label,
+            @RequestParam(required = false, defaultValue = "DESIGN_TIME") String deploymentType) {
+        log.info("POST /api/schema/tables - Creating table with label: {} and deployment type: {}", label, deploymentType);
+        TableMetadataDto created = tableMetadataService.createTable(label, deploymentType);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

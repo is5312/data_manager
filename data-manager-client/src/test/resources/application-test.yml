@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: data-manager-client-test
+
+# gRPC Client Configuration for tests
+grpc:
+  client:
+    dataOperations:
+      address: 'in-process:test'  # Use in-process channel for tests
+      negotiationType: PLAINTEXT
+
+logging:
+  level:
+    com.datamanager.client: DEBUG
+    net.devh.boot.grpc.client: DEBUG

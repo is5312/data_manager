@@ -28,6 +28,10 @@ import java.util.List;
 public class ArrowStreamingUtil {
 
     private static final Logger log = LoggerFactory.getLogger(ArrowStreamingUtil.class);
+
+    // TOGGLE THIS FLAG TO COMPARE PERFORMANCE
+    private static final boolean USE_OPTIMIZED_PIPELINE = false; // Set to false to use old instanceof approach
+
     private static final int FIRST_BATCH_SIZE = 10000; // Rows for first batch (quick initial display)
     private static final int SUBSEQUENT_BATCH_SIZE = 50000; // Rows for subsequent batches (efficient bulk loading)
 
@@ -66,36 +70,74 @@ public class ArrowStreamingUtil {
                 int batchRowCount = 0;
                 int batchNumber = 0;
 
-                // Process ResultSet in batches
-                while (resultSet.next()) {
+                long totalWriteTime = 0;
 
-                    // Write row data to vectors
+                if (USE_OPTIMIZED_PIPELINE) {
+                    // OPTIMIZED APPROACH: Pre-build pipeline
+                    long pipelineStart = System.nanoTime();
+                    VectorWriter[] vectorWriters = new VectorWriter[vectors.size()];
                     for (int i = 0; i < vectors.size(); i++) {
-                        int columnIndex = i + 1; // JDBC is 1-indexed
-                        writeValueToVector(vectors.get(i), batchRowCount, resultSet, columnIndex);
+                        vectorWriters[i] = createVectorWriter(vectors.get(i));
                     }
+                    long pipelineBuildTime = System.nanoTime() - pipelineStart;
+                    log.info("✓ OPTIMIZED - Pipeline build: {} μs for {} columns",
+                            pipelineBuildTime / 1000, vectors.size());
 
-                    batchRowCount++;
-                    totalRows++;
-
-                    // Determine current batch size: first batch uses smaller size for quick initial
-                    // display
-                    int currentBatchSize = (batchNumber == 0) ? FIRST_BATCH_SIZE : SUBSEQUENT_BATCH_SIZE;
-
-                    // Write batch when full
-                    if (batchRowCount >= currentBatchSize) {
-                        root.setRowCount(batchRowCount);
-                        writer.writeBatch();
-
-                        log.debug("Wrote Arrow batch #{}: {} rows (total: {})", batchNumber + 1, batchRowCount,
-                                totalRows);
-
-                        // Clear vectors for next batch
-                        for (FieldVector vector : vectors) {
-                            vector.clear();
+                    // Process ResultSet with optimized pipeline
+                    while (resultSet.next()) {
+                        long writeStart = System.nanoTime();
+                        for (int i = 0; i < vectorWriters.length; i++) {
+                            int columnIndex = i + 1;
+                            vectorWriters[i].write(batchRowCount, resultSet, columnIndex);
                         }
-                        batchRowCount = 0;
-                        batchNumber++;
+                        totalWriteTime += (System.nanoTime() - writeStart);
+
+                        batchRowCount++;
+                        totalRows++;
+
+                        int currentBatchSize = (batchNumber == 0) ? FIRST_BATCH_SIZE : SUBSEQUENT_BATCH_SIZE;
+                        if (batchRowCount >= currentBatchSize) {
+                            root.setRowCount(batchRowCount);
+                            writer.writeBatch();
+                            log.info("✓ OPTIMIZED - Batch #{}: {} rows (avg write: {} μs/row)",
+                                    batchNumber + 1, batchRowCount, totalWriteTime / Math.max(1, batchRowCount) / 1000);
+                            for (FieldVector vector : vectors) {
+                                vector.clear();
+                            }
+                            batchRowCount = 0;
+                            batchNumber++;
+                            totalWriteTime = 0;
+                        }
+                    }
+                } else {
+                    // OLD APPROACH: instanceof chain
+                    log.info("✗ OLD INSTANCEOF - No pipeline build (instanceof checks in loop)");
+
+                    // Process ResultSet with old instanceof approach
+                    while (resultSet.next()) {
+                        long writeStart = System.nanoTime();
+                        for (int i = 0; i < vectors.size(); i++) {
+                            int columnIndex = i + 1;
+                            writeValueToVectorOldWay(vectors.get(i), batchRowCount, resultSet, columnIndex);
+                        }
+                        totalWriteTime += (System.nanoTime() - writeStart);
+
+                        batchRowCount++;
+                        totalRows++;
+
+                        int currentBatchSize = (batchNumber == 0) ? FIRST_BATCH_SIZE : SUBSEQUENT_BATCH_SIZE;
+                        if (batchRowCount >= currentBatchSize) {
+                            root.setRowCount(batchRowCount);
+                            writer.writeBatch();
+                            log.info("✗ OLD INSTANCEOF - Batch #{}: {} rows (avg write: {} μs/row)",
+                                    batchNumber + 1, batchRowCount, totalWriteTime / Math.max(1, batchRowCount) / 1000);
+                            for (FieldVector vector : vectors) {
+                                vector.clear();
+                            }
+                            batchRowCount = 0;
+                            batchNumber++;
+                            totalWriteTime = 0;
+                        }
                     }
                 }
 
@@ -115,6 +157,130 @@ public class ArrowStreamingUtil {
         }
 
         return totalRows;
+    }
+
+    /**
+     * Functional interface for pre-built vector writers
+     */
+    @FunctionalInterface
+    private interface VectorWriter {
+        void write(int index, ResultSet rs, int columnIndex) throws SQLException;
+    }
+
+    /**
+     * Factory to create type-specific vector writers (optimized approach)
+     */
+    private static VectorWriter createVectorWriter(FieldVector vector) {
+        if (vector instanceof IntVector v) {
+            return (index, rs, columnIndex) -> {
+                int val = rs.getInt(columnIndex);
+                if (!rs.wasNull())
+                    v.setSafe(index, val);
+                else
+                    v.setNull(index);
+            };
+        } else if (vector instanceof BigIntVector v) {
+            return (index, rs, columnIndex) -> {
+                long val = rs.getLong(columnIndex);
+                if (!rs.wasNull())
+                    v.setSafe(index, val);
+                else
+                    v.setNull(index);
+            };
+        } else if (vector instanceof Float8Vector v) {
+            return (index, rs, columnIndex) -> {
+                double val = rs.getDouble(columnIndex);
+                if (!rs.wasNull())
+                    v.setSafe(index, val);
+                else
+                    v.setNull(index);
+            };
+        } else if (vector instanceof VarCharVector v) {
+            return (index, rs, columnIndex) -> {
+                byte[] val = rs.getBytes(columnIndex);
+                if (val != null)
+                    v.setSafe(index, val);
+                else
+                    v.setNull(index);
+            };
+        } else if (vector instanceof TimeStampMilliVector v) {
+            return (index, rs, columnIndex) -> {
+                Timestamp val = rs.getTimestamp(columnIndex);
+                if (val != null)
+                    v.setSafe(index, val.getTime());
+                else
+                    v.setNull(index);
+            };
+        } else if (vector instanceof DateDayVector v) {
+            return (index, rs, columnIndex) -> {
+                java.sql.Date val = rs.getDate(columnIndex);
+                if (val != null)
+                    v.setSafe(index, (int) val.toLocalDate().toEpochDay());
+                else
+                    v.setNull(index);
+            };
+        } else {
+            // Fallback
+            return (index, rs, columnIndex) -> {
+                Object val = rs.getObject(columnIndex);
+                if (val != null && vector instanceof VarCharVector v) {
+                    v.setSafe(index, val.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    vector.setNull(index);
+                }
+            };
+        }
+    }
+
+    /**
+     * OLD APPROACH: Write using instanceof chain (for comparison)
+     */
+    private static void writeValueToVectorOldWay(FieldVector vector, int index, ResultSet rs, int columnIndex)
+            throws SQLException {
+        if (vector instanceof IntVector v) {
+            int val = rs.getInt(columnIndex);
+            if (!rs.wasNull())
+                v.setSafe(index, val);
+            else
+                v.setNull(index);
+        } else if (vector instanceof BigIntVector v) {
+            long val = rs.getLong(columnIndex);
+            if (!rs.wasNull())
+                v.setSafe(index, val);
+            else
+                v.setNull(index);
+        } else if (vector instanceof Float8Vector v) {
+            double val = rs.getDouble(columnIndex);
+            if (!rs.wasNull())
+                v.setSafe(index, val);
+            else
+                v.setNull(index);
+        } else if (vector instanceof VarCharVector v) {
+            byte[] val = rs.getBytes(columnIndex);
+            if (val != null)
+                v.setSafe(index, val);
+            else
+                v.setNull(index);
+        } else if (vector instanceof TimeStampMilliVector v) {
+            Timestamp val = rs.getTimestamp(columnIndex);
+            if (val != null)
+                v.setSafe(index, val.getTime());
+            else
+                v.setNull(index);
+        } else if (vector instanceof DateDayVector v) {
+            java.sql.Date val = rs.getDate(columnIndex);
+            if (val != null)
+                v.setSafe(index, (int) val.toLocalDate().toEpochDay());
+            else
+                v.setNull(index);
+        } else {
+            Object val = rs.getObject(columnIndex);
+            if (val != null && vector instanceof VarCharVector v) {
+                v.setSafe(index, val.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                vector.setNull(index);
+            }
+        }
     }
 
     /**

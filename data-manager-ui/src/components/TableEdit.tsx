@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Container,
     Typography,
@@ -33,11 +33,15 @@ import {
     TableChart as TableChartIcon
 } from '@mui/icons-material';
 import { fetchTableById, fetchTableColumns, addColumn, changeColumnType, TableMetadata, ColumnMetadata } from '../services/api';
+import { dropTable } from '../services/duckdb.service';
+import { NavigationBar } from './NavigationBar';
 import './LandingPage.css';
 
 export const TableEdit: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const currentSchema = searchParams.get('schema') || 'public';
     const [tableInfo, setTableInfo] = useState<TableMetadata | null>(null);
     const [columns, setColumns] = useState<ColumnMetadata[]>([]);
     const [loading, setLoading] = useState(true);
@@ -70,8 +74,8 @@ export const TableEdit: React.FC = () => {
         try {
             setLoading(true);
             const [table, cols] = await Promise.all([
-                fetchTableById(Number(id)),
-                fetchTableColumns(Number(id))
+                fetchTableById(Number(id), currentSchema),
+                fetchTableColumns(Number(id), currentSchema)
             ]);
             setTableInfo(table);
             setColumns(cols);
@@ -81,7 +85,7 @@ export const TableEdit: React.FC = () => {
             setError("Failed to load table information");
             setLoading(false);
         }
-    }, [id]);
+    }, [id, currentSchema]);
 
     useEffect(() => {
         loadTableInfo();
@@ -92,6 +96,17 @@ export const TableEdit: React.FC = () => {
             await addColumn(Number(id), newColumn.label, newColumn.type);
             setAddColumnDialogOpen(false);
             setNewColumn({ label: '', type: 'VARCHAR' });
+            
+            // Invalidate DuckDB cache since schema changed
+            if (tableInfo?.physicalName) {
+                try {
+                    await dropTable(tableInfo.physicalName);
+                    console.log(`🗑️ Dropped DuckDB table ${tableInfo.physicalName} after column addition`);
+                } catch (e) {
+                    console.warn('Could not drop DuckDB table (may not exist yet):', e);
+                }
+            }
+            
             loadTableInfo(); // Refresh
         } catch (err) {
             console.error("Failed to add column", err);
@@ -109,6 +124,17 @@ export const TableEdit: React.FC = () => {
         if (!selectedColumn) return;
         try {
             await changeColumnType(Number(id), selectedColumn.id, selectedType);
+            
+            // Invalidate DuckDB cache since schema changed
+            if (tableInfo?.physicalName) {
+                try {
+                    await dropTable(tableInfo.physicalName);
+                    console.log(`🗑️ Dropped DuckDB table ${tableInfo.physicalName} after column type change`);
+                } catch (e) {
+                    console.warn('Could not drop DuckDB table (may not exist yet):', e);
+                }
+            }
+            
             setSnackbar({ open: true, message: 'Column type updated', severity: 'success' });
             setChangeTypeDialogOpen(false);
             setSelectedColumn(null);
@@ -120,8 +146,9 @@ export const TableEdit: React.FC = () => {
     };
 
     return (
-        <Box sx={{ minHeight: '100vh', background: '#FFFFFF', pt: 1.5 }}>
-            <Container maxWidth="xl">
+        <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
+            <NavigationBar />
+            <Container maxWidth="xl" sx={{ pt: 1.5 }}>
                 {/* Header */}
                 <Box sx={{
                     borderBottom: '1px solid #E0E0E0',
