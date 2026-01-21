@@ -1,0 +1,144 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    
+    // JOOQ for database queries
+    implementation 'org.jooq:jooq:3.19.16'
+    
+    // Data Manager Client (gRPC)
+    implementation project(':data-manager-client')
+    
+    // gRPC dependencies - match client version 1.63.0
+    implementation 'io.grpc:grpc-api:1.63.0'
+    implementation 'io.grpc:grpc-stub:1.63.0'
+    implementation 'io.grpc:grpc-protobuf:1.63.0'
+    implementation 'io.grpc:grpc-netty-shaded:1.63.0'
+    implementation 'com.google.protobuf:protobuf-java:3.25.1'
+    
+    // Gatling
+    implementation 'io.gatling:gatling-core-java:3.10.3'
+    implementation 'io.gatling.highcharts:gatling-charts-highcharts:3.10.3'
+    testImplementation 'io.gatling:gatling-app:3.10.3'
+    
+    // PostgreSQL
+    implementation 'org.postgresql:postgresql:42.7.4'
+    
+    // Test Data Generation
+    implementation 'net.datafaker:datafaker:2.1.0'
+    
+    // Logging
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Configure source sets for Gatling
+sourceSets {
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+        resources {
+            srcDirs = ['src/test/resources']
+        }
+    }
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+// Gatling run task
+task gatlingRun(type: JavaExec) {
+    description = 'Run Gatling performance tests'
+    group = 'verification'
+    
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.gatling.app.Gatling'
+    
+    args = [
+        '--simulation', 'com.datamanager.performance.simulations.GrpcInsertSpikeSimulation',
+        '--results-folder', "${buildDir}/gatling-results",
+        '--run-description', 'gRPC Insert Spike Test'
+    ]
+    
+    systemProperty 'spring.profiles.active', 'performance'
+    systemProperty 'gatling.core.directory.binaries', sourceSets.test.output.classesDirs.asPath
+    systemProperty 'gatling.core.directory.results', "${buildDir}/gatling-results"
+}
+
+// Migration load test task
+task migrationLoadTest(type: JavaExec) {
+    description = 'Run migration load test during table migration'
+    group = 'verification'
+    
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'io.gatling.app.Gatling'
+    
+    args = [
+        '--simulation', 'com.datamanager.performance.simulations.MigrationLoadTestSimulation',
+        '--results-folder', "${buildDir}/gatling-results",
+        '--run-description', 'Migration Load Test'
+    ]
+    
+    systemProperty 'spring.profiles.active', 'performance'
+    systemProperty 'gatling.core.directory.binaries', sourceSets.test.output.classesDirs.asPath
+    systemProperty 'gatling.core.directory.results', "${buildDir}/gatling-results"
+}
+
+// Performance test task
+task performanceTest(type: Test) {
+    description = 'Run performance tests'
+    group = 'verification'
+    
+    useJUnitPlatform()
+    
+    systemProperty 'spring.profiles.active', 'performance'
+    systemProperty 'gatling.core.directory.results', "${buildDir}/gatling-results"
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+}
+
+// Ensure classes are compiled before running Gatling
+gatlingRun.dependsOn testClasses
+migrationLoadTest.dependsOn testClasses
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // This module uses Gatling for performance tests, not JUnit
+    // The Gatling simulation is run via the gatlingRun task, not the test task
+    // Skip test task since there are no JUnit tests
+    enabled = false
+}

@@ -63,7 +63,7 @@ class DataOperationsGrpcServiceTest {
         serviceResponse.put("upd_usr", "system");
         serviceResponse.put("upd_ts", "2024-01-19T10:00:00");
 
-        when(dataService.insertRow(eq(tableId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap())).thenReturn(serviceResponse);
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -94,7 +94,7 @@ class DataOperationsGrpcServiceTest {
         Map<String, String> requestData = new HashMap<>();
         requestData.put("name", "John Doe");
 
-        when(dataService.insertRow(eq(tableId), anyMap()))
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap()))
                 .thenThrow(new IllegalArgumentException("Table not found: 999"));
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
@@ -124,7 +124,7 @@ class DataOperationsGrpcServiceTest {
         Map<String, String> requestData = new HashMap<>();
         requestData.put("name", "John Doe");
 
-        when(dataService.insertRow(eq(tableId), anyMap()))
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap()))
                 .thenThrow(new RuntimeException("Database connection failed"));
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
@@ -160,7 +160,7 @@ class DataOperationsGrpcServiceTest {
         serviceResponse.put("upd_usr", "admin");
         serviceResponse.put("upd_ts", "2024-01-19T11:00:00");
 
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.updateRow(eq(tableId), eq("public"), eq(rowId), anyMap())).thenReturn(serviceResponse);
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -192,7 +192,7 @@ class DataOperationsGrpcServiceTest {
         Map<String, String> requestData = new HashMap<>();
         requestData.put("email", "newemail@example.com");
 
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap()))
+        when(dataService.updateRow(eq(tableId), eq("public"), eq(rowId), anyMap()))
                 .thenThrow(new IllegalArgumentException("Row not found"));
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
@@ -282,7 +282,7 @@ class DataOperationsGrpcServiceTest {
         serviceResponse.put("upd_usr", "system");
         serviceResponse.put("upd_ts", "2024-01-19T10:00:00");
 
-        when(dataService.insertRow(eq(tableId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap())).thenReturn(serviceResponse);
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -315,7 +315,7 @@ class DataOperationsGrpcServiceTest {
         serviceResponse.put("upd_usr", "admin");
         serviceResponse.put("upd_ts", "2024-01-19T11:00:00");
 
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.updateRow(eq(tableId), eq("dmgr"), eq(rowId), anyMap())).thenReturn(serviceResponse);
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -333,7 +333,7 @@ class DataOperationsGrpcServiceTest {
         
         // Verify the service was called with the correct data
         ArgumentCaptor<Map<String, Object>> dataCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(dataService).updateRow(eq(tableId), eq(rowId), dataCaptor.capture());
+        verify(dataService).updateRow(eq(tableId), eq("dmgr"), eq(rowId), dataCaptor.capture());
         
         Map<String, Object> capturedData = dataCaptor.getValue();
         assertThat(capturedData).hasSize(3);

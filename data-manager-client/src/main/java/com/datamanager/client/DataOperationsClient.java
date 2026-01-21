@@ -23,13 +23,14 @@ public class DataOperationsClient {
 
     /**
      * Insert a new row into a table
+     * Thread-safe method for concurrent access
      *
      * @param tableId  The table ID
      * @param schema   The schema name (e.g., "public", "dmgr")
      * @param rowData  Map of column names to values
      * @return InsertRowResponse containing the new row ID and audit information
      */
-    public InsertRowResponse insertRow(long tableId, String schema, Map<String, String> rowData) {
+    public synchronized InsertRowResponse insertRow(long tableId, String schema, Map<String, String> rowData) {
         InsertRowRequest request = InsertRowRequest.newBuilder()
                 .setTableId(tableId)
                 .setSchemaName(schema)

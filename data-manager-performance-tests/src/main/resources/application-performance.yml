@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: data-manager-performance-tests
+  
+  # Disable web server - we only need Spring context for configuration
+  main:
+    web-application-type: none
+  
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/datamanager}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:changeme}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50
+      connection-timeout: 30000
+      idle-timeout: 300000
+      max-lifetime: 1800000
+
+# gRPC Client Configuration
+grpc:
+  client:
+    dataOperations:
+      address: ${GRPC_ADDRESS:static://localhost:9090}
+      negotiationType: PLAINTEXT
+      max-inbound-message-size: 10485760
+      deadline: 30s
+
+# Performance Test Configuration
+performance:
+  schema: dmgr
+  table-prefix: perf_test
+  
+  # Spike Test Configuration
+  spike:
+    normal-rps: 10
+    spike-rps: 500
+    normal-duration-seconds: 5
+    spike-duration-seconds: 20
+  
+  # Test Data Configuration
+  data:
+    name-pool-size: 1000
+    email-domain: perftest.example.com
+    min-age: 18
+    max-age: 80
+  
+  # Cleanup Configuration
+  cleanup:
+    enabled: ${CLEANUP_ENABLED:true}
+    delete-table-after-test: ${DELETE_TABLE:false}
+  
+  # Migration Test Configuration
+  migration:
+    initial-rows: 1000
+    write-rps: 50
+    read-rps: 20
+    warmup-duration-seconds: 10
+    migration-trigger-delay-seconds: 15
+    verification-timeout-seconds: 300
+    backend-url: ${BACKEND_URL:http://localhost:8080}
+
+logging:
+  level:
+    com.datamanager.performance: INFO
+    net.devh.boot.grpc.client: WARN
+    io.gatling: INFO
+    root: WARN

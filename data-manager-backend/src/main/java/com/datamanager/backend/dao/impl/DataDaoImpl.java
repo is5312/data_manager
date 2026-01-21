@@ -36,7 +36,16 @@ public class DataDaoImpl implements DataDao {
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
 
         // Build the insert query dynamically
-        org.jooq.Table<?> table = DSL.table(DSL.name(tableName));
+        // Handle schema-qualified table names (e.g., "dmgr.tbl_test")
+        org.jooq.Table<?> table;
+        if (tableName.contains(".")) {
+            String[] parts = tableName.split("\\.", 2);
+            String schema = parts[0];
+            String tableNameOnly = parts[1];
+            table = DSL.table(DSL.name(schema, tableNameOnly));
+        } else {
+            table = DSL.table(DSL.name(tableName));
+        }
         var insertStep = dsl.insertInto(table);
 
         List<Field<Object>> fields = new ArrayList<>();
@@ -60,7 +69,9 @@ public class DataDaoImpl implements DataDao {
 
         for (Map.Entry<String, Object> entry : filteredData.entrySet()) {
             fields.add(DSL.field(DSL.name(entry.getKey()), Object.class));
-            values.add(entry.getValue());
+            // Convert String values to appropriate types for common column names
+            Object value = convertValueForColumn(entry.getKey(), entry.getValue());
+            values.add(value);
         }
 
         // Execute and get the generated ID
@@ -87,7 +98,16 @@ public class DataDaoImpl implements DataDao {
     public Map<String, Object> updateRow(String tableName, Long rowId, Map<String, Object> rowData) {
         log.info("Updating row {} in table: {} with data: {}", rowId, tableName, rowData);
 
-        Table<?> table = DSL.table(DSL.name(tableName));
+        // Handle schema-qualified table names (e.g., "dmgr.tbl_test")
+        Table<?> table;
+        if (tableName.contains(".")) {
+            String[] parts = tableName.split("\\.", 2);
+            String schema = parts[0];
+            String tableNameOnly = parts[1];
+            table = DSL.table(DSL.name(schema, tableNameOnly));
+        } else {
+            table = DSL.table(DSL.name(tableName));
+        }
         var query = dsl.updateQuery(table);
 
         // Filter out audit columns from user input (prevent override)
@@ -128,7 +148,16 @@ public class DataDaoImpl implements DataDao {
     public void deleteRow(String tableName, Long rowId) {
         log.info("Deleting row {} from table: {}", rowId, tableName);
 
-        Table<?> table = DSL.table(DSL.name(tableName));
+        // Handle schema-qualified table names (e.g., "dmgr.tbl_test")
+        Table<?> table;
+        if (tableName.contains(".")) {
+            String[] parts = tableName.split("\\.", 2);
+            String schema = parts[0];
+            String tableNameOnly = parts[1];
+            table = DSL.table(DSL.name(schema, tableNameOnly));
+        } else {
+            table = DSL.table(DSL.name(tableName));
+        }
 
         dsl.deleteFrom(table)
                 .where(DSL.field(DSL.name("id"), Long.class).eq(rowId))
@@ -145,5 +174,66 @@ public class DataDaoImpl implements DataDao {
                 columnName.equals("add_ts") ||
                 columnName.equals("upd_usr") ||
                 columnName.equals("upd_ts"));
+    }
+
+    /**
+     * Convert String values to appropriate types based on column name patterns
+     * This handles cases where gRPC sends all values as Strings
+     */
+    private Object convertValueForColumn(String columnName, Object value) {
+        if (value == null) {
+            return null;
+        }
+        
+        // If already not a String, return as-is
+        if (!(value instanceof String)) {
+            return value;
+        }
+        
+        String strValue = (String) value;
+        
+        // Convert based on common column name patterns
+        String lowerName = columnName.toLowerCase();
+        
+        // Integer columns
+        if (lowerName.equals("age") || lowerName.endsWith("_id") || 
+            lowerName.contains("count") || lowerName.contains("quantity")) {
+            try {
+                return Integer.parseInt(strValue);
+            } catch (NumberFormatException e) {
+                log.warn("Could not convert '{}' to Integer for column '{}', keeping as String", strValue, columnName);
+                return value;
+            }
+        }
+        
+        // Long/BIGINT columns
+        if (lowerName.equals("id") && !lowerName.equals("guid")) {
+            try {
+                return Long.parseLong(strValue);
+            } catch (NumberFormatException e) {
+                log.warn("Could not convert '{}' to Long for column '{}', keeping as String", strValue, columnName);
+                return value;
+            }
+        }
+        
+        // Boolean columns
+        if (lowerName.startsWith("is_") || lowerName.startsWith("has_") || 
+            lowerName.equals("active") || lowerName.equals("enabled")) {
+            return Boolean.parseBoolean(strValue);
+        }
+        
+        // Double/Float columns
+        if (lowerName.contains("price") || lowerName.contains("amount") || 
+            lowerName.contains("rate") || lowerName.contains("percent")) {
+            try {
+                return Double.parseDouble(strValue);
+            } catch (NumberFormatException e) {
+                log.warn("Could not convert '{}' to Double for column '{}', keeping as String", strValue, columnName);
+                return value;
+            }
+        }
+        
+        // Default: return as String
+        return value;
     }
 }

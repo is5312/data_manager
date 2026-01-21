@@ -74,7 +74,7 @@ class DataOperationsGrpcServiceIntegrationTest {
         serviceResponse.put("upd_usr", "system");
         serviceResponse.put("upd_ts", "2024-01-19T10:00:00");
 
-        when(dataService.insertRow(eq(tableId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap())).thenReturn(serviceResponse);
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -97,7 +97,7 @@ class DataOperationsGrpcServiceIntegrationTest {
     void insertRow_EndToEnd_InvalidTableId() {
         // Arrange
         long tableId = 999L;
-        when(dataService.insertRow(eq(tableId), anyMap()))
+        when(dataService.insertRow(eq(tableId), eq("public"), anyMap()))
                 .thenThrow(new IllegalArgumentException("Table not found: 999"));
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
@@ -129,7 +129,7 @@ class DataOperationsGrpcServiceIntegrationTest {
         serviceResponse.put("upd_usr", "admin");
         serviceResponse.put("upd_ts", "2024-01-19T11:00:00");
 
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.updateRow(eq(tableId), eq("public"), eq(rowId), anyMap())).thenReturn(serviceResponse);
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -152,7 +152,7 @@ class DataOperationsGrpcServiceIntegrationTest {
         // Arrange
         long tableId = 1L;
         long rowId = 999L;
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap()))
+        when(dataService.updateRow(eq(tableId), eq("public"), eq(rowId), anyMap()))
                 .thenThrow(new IllegalArgumentException("Row not found"));
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
@@ -226,7 +226,7 @@ class DataOperationsGrpcServiceIntegrationTest {
         serviceResponse.put("upd_usr", "system");
         serviceResponse.put("upd_ts", "2024-01-19T10:00:00");
 
-        when(dataService.insertRow(eq(tableId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.insertRow(eq(tableId), eq("dmgr"), anyMap())).thenReturn(serviceResponse);
 
         InsertRowRequest request = InsertRowRequest.newBuilder()
                 .setTableId(tableId)
@@ -254,7 +254,7 @@ class DataOperationsGrpcServiceIntegrationTest {
         serviceResponse.put("upd_usr", "admin");
         serviceResponse.put("upd_ts", "2024-01-19T11:00:00");
 
-        when(dataService.updateRow(eq(tableId), eq(rowId), anyMap())).thenReturn(serviceResponse);
+        when(dataService.updateRow(eq(tableId), eq("public"), eq(rowId), anyMap())).thenReturn(serviceResponse);
 
         UpdateRowRequest request = UpdateRowRequest.newBuilder()
                 .setTableId(tableId)

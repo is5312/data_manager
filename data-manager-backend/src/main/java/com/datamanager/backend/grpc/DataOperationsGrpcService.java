@@ -35,8 +35,12 @@ public class DataOperationsGrpcService extends DataOperationsServiceGrpc.DataOpe
             // Convert proto map to Java map with Object values
             Map<String, Object> rowData = new HashMap<>(request.getRowDataMap());
 
-            // Call existing service layer
-            Map<String, Object> result = dataService.insertRow(request.getTableId(), rowData);
+            // Call existing service layer with schema
+            Map<String, Object> result = dataService.insertRow(
+                request.getTableId(), 
+                request.getSchemaName(), 
+                rowData
+            );
 
             // Build response
             InsertRowResponse response = InsertRowResponse.newBuilder()
@@ -77,9 +81,10 @@ public class DataOperationsGrpcService extends DataOperationsServiceGrpc.DataOpe
             // Convert proto map to Java map with Object values
             Map<String, Object> rowData = new HashMap<>(request.getRowDataMap());
 
-            // Call existing service layer
+            // Call existing service layer with schema
             Map<String, Object> result = dataService.updateRow(
                     request.getTableId(),
+                    request.getSchemaName(),
                     request.getRowId(),
                     rowData
             );
@@ -117,10 +122,11 @@ public class DataOperationsGrpcService extends DataOperationsServiceGrpc.DataOpe
     @Override
     public void deleteRow(DeleteRowRequest request, StreamObserver<DeleteRowResponse> responseObserver) {
         try {
-            log.info("gRPC DeleteRow request - tableId: {}, rowId: {}, schema: {}",
-                    request.getTableId(), request.getRowId(), request.getSchemaName());
+            log.info("gRPC DeleteRow request - tableId: {}, rowId: {}", 
+                    request.getTableId(), request.getRowId());
 
-            // Call existing service layer
+            // Note: DeleteRowRequest proto doesn't have schemaName field
+            // Using default schema for now
             dataService.deleteRow(request.getTableId(), request.getRowId());
 
             // Build response

@@ -95,6 +95,20 @@ grpc:
     port: 9090
     enable-reflection: true  # Enable reflection for testing with grpcurl/grpcui
 
+# Spring Boot Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      enabled: true
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+
 # Logging
 logging:
   level:
